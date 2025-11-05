@@ -22,6 +22,7 @@
 #include "phase.h"
 #include "constEq.h"
 #include "surf.h"
+#include "phase_transition.h" // added for box velocity pkongpet 10/22/2025
 //---------------------------------------------------------------------------
 // * open box & Winkler (with tangential viscous friction)
 // * tangential velocities
@@ -209,6 +210,7 @@ PetscErrorCode VelBoxCreate(VelBox *velbox, Scaling *scal, FB *fb)
 	ierr = getScalarParam(fb, _OPTIONAL_, "vz",     &velbox->vz,     1,  scal->velocity); CHKERRQ(ierr);
 	ierr = getIntParam   (fb, _REQUIRED_, "advect", &velbox->advect, 1,  1);              CHKERRQ(ierr);
 
+
 	if(velbox->vx == DBL_MAX && velbox->vy == DBL_MAX && velbox->vz == DBL_MAX)
 	{
         SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_USER, "Velocity box should specify at least one velocity component");
@@ -391,7 +393,6 @@ PetscErrorCode BCCreate(BCCtx *bc, FB *fb)
     ierr = getIntParam   (fb, _OPTIONAL_, "eyz_num_periods",   &bc->EyzNumPeriods,  1,                   _max_periods_   ); CHKERRQ(ierr);
     ierr = getScalarParam(fb, _REQUIRED_, "eyz_time_delims",   bc->EyzTimeDelims,  bc->EyzNumPeriods-1, scal->time       ); CHKERRQ(ierr);
     ierr = getScalarParam(fb, _REQUIRED_, "eyz_strain_rates",  bc->EyzStrainRates, bc->EyzNumPeriods,   scal->strain_rate); CHKERRQ(ierr);
-
     ierr = getScalarParam(fb, _OPTIONAL_, "bg_ref_point",      bc->BGRefPoint,     3,                   scal->length);      CHKERRQ(ierr);
 
     // Bezier blocks
@@ -780,6 +781,16 @@ PetscErrorCode BCCreate(BCCtx *bc, FB *fb)
      {
          PetscPrintf(PETSC_COMM_WORLD, "      Inflow temperature from closest marker  @ \n");
      }
+     {
+         PetscInt any_apply = 0;
+         if (bc->dbm && bc->dbm->matPhtr && bc->dbm->numPhtr > 0) {
+             for (PetscInt ii = 0; ii < bc->dbm->numPhtr; ++ii) {
+                 if (bc->dbm->matPhtr[ii].apply_v_box) { any_apply = 1; break; }
+             }
+         }
+         if (any_apply)
+             PetscPrintf(PETSC_COMM_WORLD, "      Apply v_box (NotInAirBox) to BC within [t0_box, t1_box] @\n");
+     }
     }
 
     // TO BE ADDED: Information about inflow/outflow lateral velocities that are specified!
@@ -830,7 +841,6 @@ PetscErrorCode BCReadRestart(BCCtx *bc, FILE *fp)
     {
         fread(bc->fixCellFlag, (size_t)nCells, 1, fp);
     }
-
     PetscFunctionReturn(0);
 }
 //---------------------------------------------------------------------------
@@ -1193,6 +1203,9 @@ PetscErrorCode BCApplyTemp(BCCtx *bc)
     PetscInt    mcz;
     PetscInt    i, j, k, nx, ny, nz, sx, sy, sz;
     PetscScalar ***bcT;
+    PetscScalar x,y; // pkongpet 8/26/25 moved from inside loop
+    PetscScalar xmin, xmax; // pkongpet 8/26/25
+    PetscScalar rad_plume_squared, rad_squared; // pkongpet 8/26/25
 
     PetscErrorCode ierr;
     PetscFunctionBeginUser;
@@ -1230,8 +1243,8 @@ PetscErrorCode BCApplyTemp(BCCtx *bc)
             // in case we have a plume-like inflow boundary condition:
             if(bc->Plume_Inflow == 1 && k==0)
             {
-                PetscScalar x,y;
-
+                // moved from here to top pkongpet 8/26/25
+                // PetscScalar  x, y;
                 x       = COORD_CELL(i, sx, fs->dsx);
                 y       = COORD_CELL(j, sy, fs->dsy);
                 x       = COORD_CELL_GHOST(i, fs->dsx);
@@ -1239,23 +1252,22 @@ PetscErrorCode BCApplyTemp(BCCtx *bc)
 
                 if(bc->Plume_Dimension==1)	// 2D plume
                 {	
-                    PetscScalar xmin, xmax;
-                    
-                    xmin =  bc->Plume_Center[0] - bc->Plume_Radius;
-                    xmax =  bc->Plume_Center[0] + bc->Plume_Radius;
+                    xmin =  bc->Plume_Center[0] - 3.0*bc->Plume_Radius; // pkongpet 8/26/25 exapnd the radius to 3 sigma
+                    xmax =  bc->Plume_Center[0] + 3.0*bc->Plume_Radius; // pkongpet 8/26/25 exapnd the radius to 3 sigma
 
-                    
                     if ( (x >= xmin) && (x <= xmax))
                     {
                         bcT[k-1][j][i]     = Tbot + (bc->Plume_Temperature-Tbot)*PetscExpScalar( - PetscPowScalar(x-bc->Plume_Center[0],2.0 ) /(PetscPowScalar(bc->Plume_Radius,2.0))) ;
                     }
                     
                 }
-                else	// 3D plume
+                else	// 3D plume // pkongpet 8/26/25
                 {
-                    if ( ( PetscPowScalar( (x - bc->Plume_Center[0]), 2.0)  + PetscPowScalar( (y - bc->Plume_Center[1]),2.0) ) <= PetscPowScalar(bc->Plume_Radius,2.0))
+                    rad_plume_squared = PetscPowScalar(bc->Plume_Radius,2.0);
+                    rad_squared = PetscPowScalar(x - bc->Plume_Center[0],2.0) + PetscPowScalar(y - bc->Plume_Center[1],2.0);
+                    if ( rad_squared <= 15.0*rad_plume_squared) // pkongpet 8/29/25 change from 3 to 5 to 8 to 12 to 15
                     {
-                        bcT[k-1][j][i]     = bc->Plume_Temperature;
+                        bcT[k-1][j][i]     = Tbot + (bc->Plume_Temperature-Tbot)*PetscExpScalar( - (rad_squared/(2.0*rad_plume_squared)));
                     }
                 }
             }
@@ -1696,11 +1708,13 @@ PetscErrorCode BCApplyBezier(BCCtx *bc)
 PetscErrorCode BCApplyBoundVel(BCCtx *bc)
 {
     FDSTAG      *fs;
-    PetscInt    mnz, mnx, mny;
-    PetscInt    i, j, k, nx, ny, nz, sx, sy, sz, iter;
+    DBMat      *dbm;
+    Ph_trans_t      *PhaseTrans;
+    PetscInt    mnz, mnx, mny, nPtr, numPhTrn;
+    PetscInt    i, j, k, nx, ny, nz, sx, sy, sz, iter, apply_v_box;
     PetscScalar ***bcvx,  ***bcvy, ***bcvz;
-    PetscScalar z, bot, top, vel, velin, velout,relax_dist, velbot, veltop, top_open, bot_open;
-
+    PetscScalar z, bot, top, vel, velin, velout,relax_dist, velbot, veltop, top_open, bot_open; 
+    PetscScalar t0_box, t1_box, v_box;
     PetscErrorCode ierr;
     PetscFunctionBeginUser;
 
@@ -1719,6 +1733,14 @@ PetscErrorCode BCApplyBoundVel(BCCtx *bc)
     relax_dist= bc->relax_dist;
     velbot = bc->velbot;
     veltop = bc->veltop;
+    PetscScalar time = 0.0;
+    if (bc->ts) time = bc->ts->time;
+    else if (bc->jr && bc->jr->ts) time = bc->jr->ts->time;
+    dbm = NULL;
+    if (bc->dbm) dbm = bc->dbm;
+    else if (bc->jr) dbm = bc->jr->dbm;
+    numPhTrn = dbm ? dbm->numPhtr : 0;
+
 
     // set open boundary flag
     top_open = (PetscScalar) bc->top_open;
@@ -1742,6 +1764,61 @@ PetscErrorCode BCApplyBoundVel(BCCtx *bc)
     GET_NODE_RANGE(nx, sx, fs->dsx)
     GET_CELL_RANGE(ny, sy, fs->dsy)
     GET_CELL_RANGE(nz, sz, fs->dsz)
+    
+    // pkongpet 10/22/2025
+    v_box = 0.0;
+    t0_box = 0.0;
+    t1_box = 0.0;
+    apply_v_box = 0;
+    if (dbm && dbm->matPhtr && numPhTrn > 0)
+    {
+        for(nPtr = 0; nPtr < numPhTrn; ++nPtr)
+        {
+            PhaseTrans = &dbm->matPhtr[nPtr];
+            if (PhaseTrans->v_box != 0.0)
+            {
+                v_box       = PhaseTrans->v_box;
+                t0_box      = PhaseTrans->t0_box;
+                t1_box      = PhaseTrans->t1_box;
+                apply_v_box = PhaseTrans->apply_v_box; // per-transition flag
+                break;
+            }
+        }
+    }
+
+    // pkongpet 10/22/2025
+    // Activate v_box only within [t0_box, t1_box]. If t1_box <= 0, treat as open-ended.
+    PetscScalar v_box_active = 0.0;
+    if (apply_v_box && v_box != 0.0)
+    {
+        PetscBool in_window = PETSC_FALSE;
+        if (t1_box > 0.0) {
+            in_window = (time >= t0_box && time <= t1_box) ? PETSC_TRUE : PETSC_FALSE;
+        } else {
+            in_window = (time >= t0_box) ? PETSC_TRUE : PETSC_FALSE;
+        }
+        if (in_window) v_box_active = v_box;
+    }
+    // pkongpet 10/27/2025 print info
+    PetscPrintf(PETSC_COMM_WORLD,
+            "BCApplyBoundVel: apply_flag=%d, time(ND)=%.6g, time(DIM)=%.6g %s, "
+            "t0_box(DIM)=%.6g %s, t1_box(DIM)=%.6g %s,\n"
+            "v_box(ND)=%.6g, v_box(DIM)=%.6g %s, "
+            "v_box_active(ND)=%.6g, v_box_active(DIM)=%.6g %s\n",
+            (int)apply_v_box,
+            (double)time,
+            (double)(time * (bc->scal ? bc->scal->time : 1.0)),
+            bc->scal ? bc->scal->lbl_time : "",
+            (double)(t0_box * (bc->scal ? bc->scal->time : 1.0)),
+            bc->scal ? bc->scal->lbl_time : "",
+            (double)(t1_box * (bc->scal ? bc->scal->time : 1.0)),
+            bc->scal ? bc->scal->lbl_time : "",
+            (double)v_box,
+            (double)(v_box * (bc->scal ? bc->scal->velocity : 1.0)),
+            bc->scal ? bc->scal->lbl_velocity : "",
+            (double)v_box_active,
+            (double)(v_box_active * (bc->scal ? bc->scal->velocity : 1.0)),
+            bc->scal ? bc->scal->lbl_velocity : "");
 
     if(bc->face == 1 || bc->face == 2)
     {
@@ -1758,17 +1835,17 @@ PetscErrorCode BCApplyBoundVel(BCCtx *bc)
 					if(z < bot-relax_dist)             vel = velout;
 				}
 
-		        if((bc->face  == 1) && i == 0)                         { bcvx[k][j][i] =  vel; }
-                if((bc->face  == 1) && i == mnx && bc->face_out == 1)  { bcvx[k][j][i] =  vel; }
+                if((bc->face  == 1) && i == 0)                         { bcvx[k][j][i] =  vel + v_box_active; }
+                if((bc->face  == 1) && i == mnx && bc->face_out == 1)  { bcvx[k][j][i] =  vel + v_box_active; }
 
-		        if((bc->face  == 2) && i == 0   && bc->face_out == 1)  { bcvx[k][j][i] = -vel; }
-		        if((bc->face  == 2) && i == mnx)                       { bcvx[k][j][i] = -vel; }
+                if((bc->face  == 2) && i == 0   && bc->face_out == 1)  { bcvx[k][j][i] = -vel + v_box_active; }
+                if((bc->face  == 2) && i == mnx)                       { bcvx[k][j][i] = -vel + v_box_active; }
 
-		        if((bc->face  == 1) && i == 0   && bc->face_out == -1) { bcvx[k][j][i] =  vel; }
-		        if((bc->face  == 1) && i == mnx && bc->face_out == -1) { bcvx[k][j][i] = -vel; }
+                if((bc->face  == 1) && i == 0   && bc->face_out == -1) { bcvx[k][j][i] =  vel + v_box_active; }
+                if((bc->face  == 1) && i == mnx && bc->face_out == -1) { bcvx[k][j][i] = -vel + v_box_active; }
 
-		        if((bc->face  == 2) && i == 0   && bc->face_out == -1) { bcvx[k][j][i] =  vel; }
-		        if((bc->face  == 2) && i == mnx && bc->face_out == -1) { bcvx[k][j][i] = -vel; }
+                if((bc->face  == 2) && i == 0   && bc->face_out == -1) { bcvx[k][j][i] =  vel + v_box_active; }
+                if((bc->face  == 2) && i == mnx && bc->face_out == -1) { bcvx[k][j][i] = -vel + v_box_active; }
 
 
             }
@@ -1777,8 +1854,8 @@ PetscErrorCode BCApplyBoundVel(BCCtx *bc)
                 if(z <= top && z >= bot) vel = velin;
                 if(z < bot)              vel = velout;
 
-                if((bc->face == 1)  && i == 0 )   { bcvx[k][j][i] = vel; }
-                if((bc->face == 2) && i == mnx) { bcvx[k][j][i] = vel; }
+                if((bc->face == 1)  && i == 0 )   { bcvx[k][j][i] = vel + v_box_active; }
+                if((bc->face == 2) && i == mnx) { bcvx[k][j][i] = vel + v_box_active; }
             }
             iter++;
         }
@@ -1793,8 +1870,15 @@ PetscErrorCode BCApplyBoundVel(BCCtx *bc)
             vel = 0.0;
             if(z <= top && z >= bot) vel = velin;
 
-            if(i == 0)   { bcvx[k][j][i] = vel; }
-            if(i == mnx) { bcvx[k][j][i] = -vel; }
+            /* Apply box translation velocity (v_box) as an offset to the
+             * prescribed boundary velocities. The sign of the boundary velocity 'vel';
+             * v_box is added to both sides to represent a rigid translation
+             * of the entire domain in the +x direction.
+             */ // pkongpet 10/20/2025
+
+            if(i == 0)   { bcvx[k][j][i] =  vel + v_box_active; }
+            if(i == mnx) { bcvx[k][j][i] = -vel + v_box_active; }
+
             iter++;
         }
         END_STD_LOOP

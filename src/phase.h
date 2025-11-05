@@ -126,6 +126,7 @@ public:
 	PetscScalar     t0_box;
 	PetscScalar     t1_box;
 	PetscScalar     v_box;
+	PetscInt apply_v_box;   /* 0=off, 1=apply this transition’s v_box to BCs */ // pkongpet 10/24/2025
 
 	// for linking NotInAirBoxes
 	PetscInt      phtr_link_left;
