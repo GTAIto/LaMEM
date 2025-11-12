@@ -1795,7 +1795,8 @@ PetscErrorCode BCApplyBoundVel(BCCtx *bc)
         if (t1_box > 0.0) {
             in_window = (time >= t0_box && time <= t1_box) ? PETSC_TRUE : PETSC_FALSE;
         } else {
-            in_window = (time >= t0_box) ? PETSC_TRUE : PETSC_FALSE;
+            in_window = (time >= t0_box) ? PETSC_TRUE : PETSC_FALSE; //End time when v_box stops (≤0 means “no end”)
+
         }
         if (in_window) v_box_active = v_box;
     }
@@ -1876,8 +1877,8 @@ PetscErrorCode BCApplyBoundVel(BCCtx *bc)
              * of the entire domain in the +x direction.
              */ // pkongpet 10/20/2025
 
-            if(i == 0)   { bcvx[k][j][i] =  vel + v_box_active; }
-            if(i == mnx) { bcvx[k][j][i] = -vel + v_box_active; }
+            if(i == 0)   { bcvx[k][j][i] =  vel + v_box_active; } // left boundary (face 1)
+            if(i == mnx) { bcvx[k][j][i] = -vel + v_box_active; } // right boundary (face 2)
 
             iter++;
         }

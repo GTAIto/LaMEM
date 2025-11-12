@@ -146,7 +146,7 @@ PetscErrorCode DBMatReadPhaseTr(DBMat *dbm, FB *fb)
 	    ph->v_box  /= scal->velocity;
 	    ph->t0_box /= scal->time;
 	    ph->t1_box /= scal->time;
-		if (ph->apply_v_box) PetscPrintf(PETSC_COMM_WORLD, "     apply_v_box_to_bc = %d\n", (int)ph->apply_v_box);
+		if (ph->apply_v_box) PetscPrintf(PETSC_COMM_WORLD, "     apply_v_box_to_bc = %d\n", (int)ph->apply_v_box); //pkongpet 10/24/2025
 	  }
 	
 	ierr = getStringParam(fb, _OPTIONAL_, "PhaseDirection",     str_direction, "BothWays");                                          CHKERRQ(ierr);
