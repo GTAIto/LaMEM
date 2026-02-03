@@ -758,6 +758,12 @@ end
     @test perform_lamem_test(dir,"PlumeLithos_Interaction_3D.dat","InflowOutflow-3D_p4.expected",
                             keywords=keywords, accuracy=acc, cores=4, opt=true, mpiexec=mpiexec)
 
+    # Gaussian plume 3D test
+    keywords = ("|Div|_inf","|Div|_2","|mRes|_2","|eRes|_2")
+    acc      = ((rtol=1e-7,atol=1e-11), (rtol=1e-5, atol=1e-10), (rtol=1e-4,atol=2e-10), (rtol=1e-7,atol=1e-11));
+    @test perform_lamem_test(dir,"Plume_Gaussian_3D.dat","Plume_Gaussian_3D.expected",
+                            keywords=keywords, accuracy=acc, cores=4, opt=true, mpiexec=mpiexec)
+
     # Test inflow/outflow conditions in 2D using optimized LaMEM   
     # t17_InflowOutflow2D_Pres_opt 
     acc      = ((rtol=2e-7,atol=2e-7), (rtol=1e-5, atol=1e-6), (rtol=1e-4,atol=2e-8), (rtol=1e-6,atol=1e-9));
@@ -767,8 +773,8 @@ end
     # test_3D_Pres():
     if test_superlu
         # t17_InflowOutflow3D_Pres_opt
-        #  keywords = ("|Div|_inf","|Div|_2","|mRes|_2","|eRes|_2")
-        acc      = ((rtol=1e-7,atol=1e-7), (rtol=1e-5, atol=1e-5), (rtol=1e-4,atol=1e-8), (rtol=1e-6,atol=1e-9));
+        keywords = ("|Div|_inf","|Div|_2","|mRes|_2")
+        acc      = ((rtol=1e-7,atol=1e-7), (rtol=1e-5, atol=1e-5), (rtol=1e-4,atol=1e-8));
         @test perform_lamem_test(dir,"PlumeLithos_Interaction_3D_Perm.dat","InflowOutflow-3D_Perm_p4.expected",
                                 keywords=keywords, accuracy=acc, cores=4, opt=true, mpiexec=mpiexec)         
     end                
