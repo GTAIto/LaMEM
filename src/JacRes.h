@@ -55,6 +55,8 @@ struct SolVarBulk
 	PetscScalar  pn;     // history pressure
 	PetscScalar  rho_pf; // fluid density from phase diagram
 	PetscScalar  mf;     // melt fraction from phase diagram
+	PetscScalar  Fn;     // history melt fraction (from markers, start of time step)
+	PetscScalar  dFdt;   // melt rate dF/dt (for latent heat and output)
 	PetscScalar  phi;    // PSD angle
 	PetscScalar  Ha ;    // Adiabatic heating
     PetscScalar  cond ;  // conductivity

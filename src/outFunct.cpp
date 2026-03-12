@@ -570,7 +570,19 @@ PetscErrorCode PVOutWriteMeltFraction(OutVec* outvec)
 	PetscFunctionReturn(0);
 }
 //---------------------------------------------------------------------------
+PetscErrorCode PVOutWriteMeltRate(OutVec* outvec)
+{
+    COPY_FUNCTION_HEADER
 
+	// macros to copy melt rate to buffer
+    #define GET_DFDT_CENTER  buff[k][j][i] = jr->svCell[iter++].svBulk.dFdt;
+    
+	cf = scal->strain_rate;
+    
+	INTERPOLATE_COPY(fs->DA_CEN, outbuf->lbcen, InterpCenterCorner, GET_DFDT_CENTER, 1, 0)
+    
+	PetscFunctionReturn(0);
+}
 //---------------------------------------------------------------------------
 PetscErrorCode PVOutWriteVolRate(OutVec* outvec)
 {

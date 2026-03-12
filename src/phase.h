@@ -210,6 +210,8 @@ public:
 	PetscInt     pdAct;             // phase diagram activity flag
 	PetscScalar  mfc;               // melt fraction viscosity correction
 	PetscScalar  rho_melt;          // rho melt
+	PetscScalar  M_cpx;    			// modal cpx fraction for Katz [wt frac, 0-1]
+	PetscScalar  X_water;  			// bulk water content for Katz  [wt frac, 0-1]
 	PetscInt     Phase_Diagram_melt;// flag that allows only to consider the melt quantity from a phase diagram
 };
 

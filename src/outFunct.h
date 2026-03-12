@@ -65,6 +65,7 @@ PetscErrorCode PVOutWriteJ2DevStress (OutVec*);
 PetscErrorCode PVOutWriteStrainRate  (OutVec*);
 PetscErrorCode PVOutWriteJ2StrainRate(OutVec*);
 PetscErrorCode PVOutWriteMeltFraction(OutVec*);
+PetscErrorCode PVOutWriteMeltRate    (OutVec*);
 PetscErrorCode PVOutWriteFluidDensity(OutVec*);
 PetscErrorCode PVOutWriteVolRate     (OutVec*);
 PetscErrorCode PVOutWriteVorticity   (OutVec*);

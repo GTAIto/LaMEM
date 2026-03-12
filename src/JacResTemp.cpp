@@ -541,6 +541,13 @@ PetscErrorCode JacResGetTempRes(JacRes *jr, PetscScalar dt)
 
 		Ha = jr->ctrl.AdiabHeat*Ha;
 
+		// Latent heat of melting (Katz)
+		PetscScalar Hl = 0.0;
+		if(svBulk->dFdt != 0.0)
+		{
+    		PetscScalar DS_nd = 300.0 / jr->scal->cpecific_heat;  // DS=300 J/kg/K, non-dimensionalized
+    		Hl = svBulk->rho * DS_nd * Tc * svBulk->dFdt;
+		}
 
 		// get mesh steps
 		dx = SIZE_CELL(i, sx, fs->dsx);
@@ -554,7 +561,7 @@ PetscErrorCode JacResGetTempRes(JacRes *jr, PetscScalar dt)
 		// to get positive diagonal in the preconditioner matrix
 		// put right hand side to the left, which gives the following:
 
-		ge[k][j][i] = rho_Cp*(invdt*(Tc - Tn)) - (fqx - bqx)/dx - (fqy - bqy)/dy - (fqz - bqz)/dz - Hr - rho_A - Ha;
+		ge[k][j][i] = rho_Cp*(invdt*(Tc - Tn)) - (fqx - bqx)/dx - (fqy - bqy)/dy - (fqz - bqz)/dz - Hr - rho_A - Ha + Hl;
 	}
 	END_STD_LOOP
 

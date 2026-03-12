@@ -458,6 +458,8 @@ PetscErrorCode DBMatReadPhase(DBMat *dbm, FB *fb, PetscBool PrintOutput)
 	//=================================================================================
 	ierr = getScalarParam(fb, _OPTIONAL_, "mfc",      &m->mfc,   1, 1.0);  CHKERRQ(ierr);
 	ierr = getScalarParam(fb, _OPTIONAL_, "rho_melt", &m->rho_melt,1, 1.0);  CHKERRQ(ierr);
+	ierr = getScalarParam(fb, _OPTIONAL_, "M_cpx",   &m->M_cpx,   1, 1.0); CHKERRQ(ierr);
+	ierr = getScalarParam(fb, _OPTIONAL_, "X_water", &m->X_water, 1, 1.0); CHKERRQ(ierr);
 
 	if (PrintOutput)
 	{	

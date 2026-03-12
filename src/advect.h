@@ -34,6 +34,7 @@ struct Marker
 	PetscScalar X[3];  // global coordinates
 	PetscScalar p;     // pressure
 	PetscScalar T;     // temperature
+	PetscScalar F;     // melt fraction (Katz)
 	PetscScalar APS;   // accumulated plastic strain
 	PetscScalar ATS;   // accumulated total strain
 	Tensor2RS   S;     // deviatoric stress

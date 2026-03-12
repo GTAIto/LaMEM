@@ -67,6 +67,7 @@ PetscErrorCode MarkerMerge(Marker &A, Marker &B, Marker &C)
 	C.U[0]  = (A.U[0] + B.U[0])/2.0;
 	C.U[1]  = (A.U[1] + B.U[1])/2.0;
 	C.U[2]  = (A.U[2] + B.U[2])/2.0;
+	C.F     = (A.F    + B.F)   /2.0;
 
 	PetscFunctionReturn(0);
 }
@@ -924,6 +925,9 @@ PetscErrorCode ADVAdvectMark(AdvCtx *actx)
 		// update pressure & temperature variables
 		P->p += lp[sz+K][sy+J][sx+I]  	- 	svCell->svBulk.pn;
 		P->T += lT[sz+K][sy+J][sx+I] 	-	svCell->svBulk.Tn;
+		P->F += svCell->svBulk.mf 		- 	svCell->svBulk.Fn;
+		if(P->F < 0.0) P->F = 0.0;
+		if(P->F > 1.0) P->F = 1.0;
 
 		// override temperature of air phase
 		if(AirPhase != -1 && P->phase == AirPhase) P->T = Ttop;
@@ -1824,6 +1828,7 @@ PetscErrorCode ADVInterpMarkToCell(AdvCtx *actx)
 		svCell->U[0]       = 0.0;
 		svCell->U[1]       = 0.0;
 		svCell->U[2]       = 0.0;
+		svCell->svBulk.Fn   = 0.0;
 	}
 
 	// scan ALL markers
@@ -1868,7 +1873,7 @@ PetscErrorCode ADVInterpMarkToCell(AdvCtx *actx)
 		svCell->U[0]      += w*P->U[0];
 		svCell->U[1]      += w*P->U[1];
 		svCell->U[2]      += w*P->U[2];
-
+		svCell->svBulk.Fn += w * P->F;
 	}
 
 	// normalize interpolated values
@@ -1891,6 +1896,7 @@ PetscErrorCode ADVInterpMarkToCell(AdvCtx *actx)
 		svCell->U[0]      /= w;
 		svCell->U[1]      /= w;
 		svCell->U[2]      /= w;
+		svCell->svBulk.Fn /= w;
 	}
 
 	PetscFunctionReturn(0);
@@ -2096,6 +2102,7 @@ PetscErrorCode ADVUpdateHistADVNone(AdvCtx *actx)
 
 		svCell->svBulk.pn = lp[k][j][i];
 		svCell->svBulk.Tn = lT[k][j][i];
+		svCell->svBulk.Fn = svCell->svBulk.mf;
 		svCell->hxx       = svCell->sxx;
 		svCell->hyy       = svCell->syy;
 		svCell->hzz       = svCell->szz;

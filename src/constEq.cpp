@@ -23,6 +23,7 @@
 #include "parsing.h"
 #include "bc.h"
 #include "dike.h"
+#include "meltParam.h"
 //---------------------------------------------------------------------------
 PetscErrorCode setUpConstEq(ConstEqCtx *ctx, JacRes *jr)
 {
@@ -687,6 +688,26 @@ PetscErrorCode volConstEq(ConstEqCtx *ctx)
 					svBulk->rho_pf += phRat[i]*Pd->rho_f;
 				}
 			}
+			
+			// Katz (2003) melting — activates automatically when M_cpx > 0
+			if(mat->M_cpx > 0.0)
+			{
+				meltPar_Katz mp;
+				PetscScalar P_GPa, T_C, F_katz, Tf;
+    			setMeltParamsToDefault_Katz(&mp);
+				// Use lithostatic pressure, convert to GPa for Katz
+    			P_GPa = ctx->p_lith * ctx->scal->stress_si / 1.0e9;  // Pa → GPa
+				// Convert temperature to Celsius for Katz
+    			T_C   = T * ctx->scal->temperature - ctx->scal->Tshift; // K → °C
+
+    			if(P_GPa < 0.0) P_GPa = 0.0;
+
+    			F_katz = MPgetFconsH(P_GPa, T_C, mat->X_water, mat->M_cpx, &Tf, &mp);
+    			if(F_katz < 0.0) F_katz = 0.0;
+    			if(F_katz > 1.0) F_katz = 1.0;
+
+    			svBulk->mf += phRat[i] * F_katz;
+			}
 
 			// initialize
 			cf_comp  = 1.0;
@@ -756,6 +777,12 @@ PetscErrorCode volConstEq(ConstEqCtx *ctx)
 	}
 
 	if(Kavg) svBulk->IKdt = 1.0/Kavg/dt;
+
+	// Compute rate of melting
+	if(dt > 0.0)
+   		svBulk->dFdt = (svBulk->mf - svBulk->Fn) / dt;
+	else
+    	svBulk->dFdt = 0.0;
 
 	PetscFunctionReturn(0);
 }
