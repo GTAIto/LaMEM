@@ -679,6 +679,7 @@ PetscErrorCode LaMEMLibSolve(LaMEMLib *lm, void *param, PetscLogStage stages[4])
 
 		// view nonlinear residual
 		ierr = JacResViewRes(&lm->jr); CHKERRQ(ierr);
+		ierr = LaMEMLibSolveTemp(lm, lm->jr.ts->dt); CHKERRQ(ierr);
 
 		// Compute adjoint gradients every TS
 		if (param)

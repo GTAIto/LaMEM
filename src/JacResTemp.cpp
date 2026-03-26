@@ -545,8 +545,8 @@ PetscErrorCode JacResGetTempRes(JacRes *jr, PetscScalar dt)
 		PetscScalar Hl = 0.0;
 		if(svBulk->dFdt != 0.0)
 		{
-    		PetscScalar DS_nd = 300.0 / jr->scal->cpecific_heat;  // DS=300 J/kg/K, non-dimensionalized
-    		Hl = svBulk->rho * DS_nd * Tc * svBulk->dFdt;
+			PetscScalar DS_nd = 300.0 / jr->scal->cpecific_heat;  // DS=300 J/kg/K, non-dimensionalized
+			Hl = svBulk->rho * DS_nd * Tc * svBulk->dFdt;
 		}
 
 		// get mesh steps
@@ -705,7 +705,8 @@ PetscErrorCode JacResGetTempMat(JacRes *jr, PetscScalar dt)
 		v[6] =  invdt*rho_Cp
 		+       (bkx/bdx + fkx/fdx)/dx
 		+       (bky/bdy + fky/fdy)/dy
-		+       (bkz/bdz + fkz/fdz)/dz;
+		+       (bkz/bdz + fkz/fdz)/dz
+		+       svBulk->rho * (300.0 / jr->scal->cpecific_heat) * svBulk->dFdt;
 
 		// set matrix coefficients
 		PetscCall(MatSetValuesStencil(jr->Att, 1, row, 7, col, v, ADD_VALUES));

@@ -45,9 +45,9 @@ typedef struct melt_parameters_s {
 PetscScalar calcDT(PetscScalar P, PetscScalar X, PetscScalar F,meltPar_Katz *mp);
 PetscScalar calcF (PetscScalar T, PetscScalar dT,PetscScalar P,PetscScalar Fcpx,meltPar_Katz *mp);
 PetscScalar FX_bal(PetscScalar x1,PetscScalar x2,PetscScalar T,PetscScalar P,PetscScalar X,PetscScalar Fcpx,meltPar_Katz *mp);
-PetscScalar FT_bal(PetscScalar x1,PetscScalar x2,PetscScalar T,PetscScalar P,PetscScalar X,PetscScalar M,meltPar_Katz *mp);
+PetscScalar FT_bal(PetscScalar x1,PetscScalar x2,PetscScalar T,PetscScalar P,PetscScalar X,PetscScalar M,PetscScalar Fi,meltPar_Katz *mp);
 PetscScalar FZero (PetscScalar F, PetscScalar T, PetscScalar P,PetscScalar X,PetscScalar Fcpx, meltPar_Katz *mp);
-PetscScalar HZero (PetscScalar F, PetscScalar T, PetscScalar P,PetscScalar X,PetscScalar M,meltPar_Katz *mp);
+PetscScalar HZero (PetscScalar F, PetscScalar T, PetscScalar P,PetscScalar X,PetscScalar M,PetscScalar Fi,meltPar_Katz *mp);
 
 //---------------------------------------------------------------------------
 // public function prototypes
@@ -56,7 +56,7 @@ void        setMeltParamsToDefault_Katz(meltPar_Katz *mp);
 PetscScalar MPgetFEquilib (PetscScalar P,PetscScalar T, PetscScalar X, PetscScalar M,meltPar_Katz *mp);
 PetscScalar MPgetFReactive(PetscScalar P,PetscScalar T, PetscScalar Cf,PetscScalar M,meltPar_Katz *mp);
 PetscScalar MPgetTEquilib (PetscScalar P,PetscScalar F, PetscScalar X, PetscScalar M,meltPar_Katz *mp);
-PetscScalar MPgetFconsH   (PetscScalar P,PetscScalar Ti,PetscScalar X, PetscScalar M,PetscScalar *Tf,meltPar_Katz *mp);
+PetscScalar MPgetFconsH   (PetscScalar P,PetscScalar Ti,PetscScalar X, PetscScalar M,PetscScalar Fi,meltPar_Katz *mp);
 PetscScalar MPgetTSolidus (PetscScalar P,PetscScalar X, meltPar_Katz *mp);
 
 //---------------------------------------------------------------------------

@@ -180,7 +180,7 @@ PetscScalar MPgetTEquilib(PetscScalar P,PetscScalar F,PetscScalar X,PetscScalar 
 		return Tliq - calcDT(P,X,1.0,mp);
 }  
 //---------------------------------------------------------------------------
-PetscScalar MPgetFconsH(PetscScalar P,PetscScalar Ti,PetscScalar X,PetscScalar M,PetscScalar *Tf,meltPar_Katz *mp)
+PetscScalar MPgetFconsH(PetscScalar P, PetscScalar Ti, PetscScalar X, PetscScalar M, PetscScalar Fi, meltPar_Katz *mp)
 {
 	// The function whose root is the melt fraction that conserves enthalpy.
 
@@ -189,11 +189,11 @@ PetscScalar MPgetFconsH(PetscScalar P,PetscScalar Ti,PetscScalar X,PetscScalar M
 	Tsol = mp->A1 + mp->A2*P + mp->A3*P*P;
 
 	if (Ti<(Tsol-calcDT(P,X,0.0,mp))) {
-		*Tf = Ti;
+		//*Tf = Ti;
 		return 0.0;
 	} else {
-		F  = FT_bal(0.0,1.0,Ti,P,X,M,mp);
-		*Tf = MPgetTEquilib(P,F,X,M,mp);
+		F  = FT_bal(0.0,1.0,Ti,P,X,M,Fi,mp);
+		//*Tf = MPgetTEquilib(P,F,X,M,mp);
 		return F;
 	}
 }
@@ -237,10 +237,10 @@ PetscScalar FZero(PetscScalar F, PetscScalar T, PetscScalar P, PetscScalar X, Pe
 	return calcF(T,calcDT(P,X,F,mp),P,Fcpx,mp) - F;
 }
 //---------------------------------------------------------------------------
-PetscScalar HZero(PetscScalar F,PetscScalar T,PetscScalar P,PetscScalar X,PetscScalar M,meltPar_Katz *mp)
+PetscScalar HZero(PetscScalar F, PetscScalar T, PetscScalar P, PetscScalar X, PetscScalar M, PetscScalar Fi, meltPar_Katz *mp)
 {
 	// The function whose root is the melt fraction that conserves enthalpy.
-	return (MPgetTEquilib(P,F,X,M,mp)+273.0)*(mp->Cp+mp->DS*F) - (T+273.0)*mp->Cp;
+    return (MPgetTEquilib(P,F,X,M,mp)+273.0)*(mp->Cp+mp->DS*F) - (T+273.0)*(mp->Cp+mp->DS*Fi);
 }
 //---------------------------------------------------------------------------
 PetscScalar FX_bal(PetscScalar x1,PetscScalar x2,PetscScalar T,PetscScalar P,PetscScalar X,PetscScalar Fcpx,meltPar_Katz *mp)
@@ -292,28 +292,28 @@ PetscScalar FX_bal(PetscScalar x1,PetscScalar x2,PetscScalar T,PetscScalar P,Pet
 	return 0.0; /* never used */
 }
 //---------------------------------------------------------------------------
-PetscScalar FT_bal(PetscScalar x1,PetscScalar x2,PetscScalar T,PetscScalar P,PetscScalar X,PetscScalar M,meltPar_Katz *mp)
+PetscScalar FT_bal(PetscScalar x1, PetscScalar x2, PetscScalar T, PetscScalar P, PetscScalar X, PetscScalar M, PetscScalar Fi, meltPar_Katz *mp)
 {
 	// Adapted from Ridder's Method as described by Numerical Recipes in C.
 
 	PetscInt    j;
 	PetscScalar fh,fl,fm,fnew,s,xh,xl,xm,xnew,ans;
 
-	fl = HZero(x1,T,P,X,M,mp);
-	fh = HZero(x2,T,P,X,M,mp);
+	fl = HZero(x1,T,P,X,M,Fi,mp);
+	fh = HZero(x2,T,P,X,M,Fi,mp);
 
 	if ( (fl>0.0 && fh<0.0) || (fl<0.0 && fh>0.0) ) {
 		xl=x1; xh=x2; ans=UNUSED;
 
 		for (j=1;j<=MAXITS;j++) {
 			xm=0.5*(xl+xh);
-			fm=HZero(xm,T,P,X,M,mp);
+			fm=HZero(xm,T,P,X,M,Fi,mp);
 			s=sqrt(fm*fm-fl*fh);
 			if (s==0.0) return ans;
 			xnew=xm+(xm-xl)*((fl>=fh ? 1.0 : -1.0)*fm/s);
 			if(fabs(xnew-ans) <= X_ACC) return ans;
 			ans=xnew;
-			fnew=HZero(ans,T,P,X,M,mp);
+			fnew=HZero(ans,T,P,X,M,Fi,mp);
 			if (fnew==0.0) return ans;
 			if (SIG(fm,fnew) != fm) {
 				xl=xm;
