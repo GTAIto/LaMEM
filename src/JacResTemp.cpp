@@ -411,7 +411,6 @@ PetscErrorCode JacResGetTempRes(JacRes *jr, PetscScalar dt)
 	SolVarCell *svCell;
 	SolVarDev  *svDev;
 	SolVarBulk *svBulk;
-	Controls   ctrl;
 	PetscInt    iter, num, *list;
 	PetscInt    Ip1, Im1, Jp1, Jm1, Kp1, Km1;
 	PetscInt    i, j, k, nx, ny, nz, sx, sy, sz, mx, my, mz;
@@ -433,9 +432,6 @@ PetscErrorCode JacResGetTempRes(JacRes *jr, PetscScalar dt)
 	bc    = jr->bc;
 	num   = bc->tNumSPC;
 	list  = bc->tSPCList;
-
-	// access controls
-	ctrl = jr->ctrl;
 
 	// initialize maximum cell index in all directions
 	mx = fs->dsx.tcels - 1;
@@ -526,21 +522,18 @@ PetscErrorCode JacResGetTempRes(JacRes *jr, PetscScalar dt)
 		// Compute the pressure gradient
 		if(jr->ctrl.initGuess == 0)
 		{
-			bdpdx = ((Pc - P[k][j][Im1])/bdx)*vx[k][j][i];        fdpdx = ((P[k][j][Ip1] - Pc)/fdx)*vx[k][j][i+1];
-			bdpdy = ((Pc - P[k][Jm1][i])/bdy)*vy[k][j][i];        fdpdy = ((P[k][Jp1][i] - Pc)/fdy)*vy[k][j+1][i];
- 			bdpdz = ((Pc - P[Km1][j][i])/bdz)*vz[k][j][i];   fdpdz = ((P[Kp1][j][i] - Pc)/fdz)*vz[k+1][j][i];
-            //if on bottom boundary use the same dpdz as above the cell with the correct vz.
-            if (k==0) bdpdz = ((P[k+1][j][i] - Pc)/fdz)*vz[k][j][i];  
-			// Adiabatic Heat term
-			Ha = jr->ctrl.AdiabHeat*(Tc*svBulk->alpha*((bdpdx+fdpdx)*0.5+(bdpdy+fdpdy)*0.5+(bdpdz+fdpdz)*0.5));
+<	        bdpdx = ((Pc - P[k][j][Im1])/bdx)*vx[k][j][i];        fdpdx = ((P[k][j][Ip1] - Pc)/fdx)*vx[k][j][i+1];
+	        bdpdy = ((Pc - P[k][Jm1][i])/bdy)*vy[k][j][i];        fdpdy = ((P[k][Jp1][i] - Pc)/fdy)*vy[k][j+1][i];
+ 	        bdpdz = ((Pc - P[Km1][j][i])/bdz)*vz[k][j][i];        fdpdz = ((P[Kp1][j][i] - Pc)/fdz)*vz[k+1][j][i];
+	         //if on bottom boundary assume dpdz is constant across the cell.
+	        if (k==0) bdpdz = ((P[k+1][j][i] - Pc)/fdz)*vz[k][j][i];  
+	        // Adiabatic Heat term
+	        Ha = jr->ctrl.AdiabHeat*(Tc*svBulk->alpha*((bdpdx+fdpdx)*0.5+(bdpdy+fdpdy)*0.5+(bdpdz+fdpdz)*0.5));
 		}
 		else
 		{
-			Ha = 0.0;
+	        Ha = 0.0;
 		}
-
-		svBulk->Ha = Ha;
-
 
 		// get mesh steps
 		dx = SIZE_CELL(i, sx, fs->dsx);
