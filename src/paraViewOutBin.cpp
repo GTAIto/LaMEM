@@ -276,6 +276,7 @@ PetscInt OutMaskCountActive(OutMask *omask)
 	if(omask->strain_rate)    cnt++; // deviatoric strain rate tensor
 	if(omask->j2_strain_rate) cnt++; // deviatoric strain rate second invariant
 	if(omask->melt_fraction)  cnt++; // melt fraction
+	if(omask->katz_temp)      cnt++; // Katz equilibrium temperature
 	if(omask->melt_rate)      cnt++; // melt rate dF/dt
 	if(omask->fluid_density)  cnt++; // fluid density
 	if(omask->vol_rate)       cnt++; // volumetric strain rate
@@ -367,6 +368,7 @@ PetscErrorCode PVOutCreate(PVOut *pvout, FB *fb)
 	ierr = getIntParam   (fb, _OPTIONAL_, "out_cont_res",       &omask->cont_res,          1, 1); CHKERRQ(ierr);
 	ierr = getIntParam   (fb, _OPTIONAL_, "out_energ_res",      &omask->energ_res,         1, 1); CHKERRQ(ierr);
 	ierr = getIntParam   (fb, _OPTIONAL_, "out_melt_fraction",  &omask->melt_fraction,     1, 1); CHKERRQ(ierr);
+	ierr = getIntParam   (fb, _OPTIONAL_, "out_katz_temp",      &omask->katz_temp,         1, 1); CHKERRQ(ierr);
 	ierr = getIntParam   (fb, _OPTIONAL_, "out_melt_rate",      &omask->melt_rate,         1, 1); CHKERRQ(ierr);
 	ierr = getIntParam   (fb, _OPTIONAL_, "out_fluid_density",  &omask->fluid_density,     1, 1); CHKERRQ(ierr);
 	ierr = getIntParam   (fb, _OPTIONAL_, "out_vel_gr_tensor",  &omask->vel_gr_tensor,     1, 1); CHKERRQ(ierr);
@@ -442,6 +444,7 @@ PetscErrorCode PVOutCreate(PVOut *pvout, FB *fb)
 	if(omask->cont_res)       PetscPrintf(PETSC_COMM_WORLD, "   Continuity residual                     @ \n");
 	if(omask->energ_res)      PetscPrintf(PETSC_COMM_WORLD, "   energy residual                         @ \n");
 	if(omask->melt_fraction)  PetscPrintf(PETSC_COMM_WORLD, "   Melt fraction                           @ \n");
+	if(omask->katz_temp)      PetscPrintf(PETSC_COMM_WORLD, "   Katz equilibrium temperature            @ \n");
 	if(omask->melt_rate)      PetscPrintf(PETSC_COMM_WORLD, "   Melt rate dF/dt                         @ \n");
 	if(omask->fluid_density)  PetscPrintf(PETSC_COMM_WORLD, "   Fluid density                           @ \n");
 	if(omask->vel_gr_tensor)  PetscPrintf(PETSC_COMM_WORLD, "   Velocity Gradient Tensor                @ \n");
@@ -529,6 +532,7 @@ PetscErrorCode PVOutCreateData(PVOut *pvout)
 	if(omask->DIIpl)          OutVecCreate(&pvout->outvecs[iter++], jr, outbuf, "rel_pl_rate",    scal->lbl_unit,             &PVOutWriteRelDIIpl,     1, NULL);
 	// === debugging vectors ===============================================
 	if(omask->melt_fraction)  OutVecCreate(&pvout->outvecs[iter++], jr, outbuf, "melt_fraction",  scal->lbl_unit,             &PVOutWriteMeltFraction, 1, NULL);
+	if(omask->katz_temp)      OutVecCreate(&pvout->outvecs[iter++], jr, outbuf, "katz_temp",      scal->lbl_temperature,      &PVOutWriteKatzTemp,     1, NULL);
     if(omask->melt_rate)      OutVecCreate(&pvout->outvecs[iter++], jr, outbuf, "melt_rate",      scal->lbl_strain_rate,      &PVOutWriteMeltRate,     1, NULL);
 	if(omask->fluid_density)  OutVecCreate(&pvout->outvecs[iter++], jr, outbuf, "fluid_density",  scal->lbl_density,	      &PVOutWriteFluidDensity, 1, NULL);
 	if(omask->moment_res)     OutVecCreate(&pvout->outvecs[iter++], jr, outbuf, "moment_res",     scal->lbl_volumetric_force, &PVOutWriteMomentRes,    3, NULL);

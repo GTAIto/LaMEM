@@ -61,6 +61,8 @@ struct SolVarBulk
 	PetscScalar  Ha ;    // Adiabatic heating
     PetscScalar  cond ;  // conductivity
 	PetscScalar  mf;     // Katz melt fraction (current timestep)
+	PetscScalar  Teq;    // Katz equilibrium temperature (non-dimensional)
+	PetscScalar  dFdT;   // d(mf)/d(T): sensitivity of Katz melt fraction to temperature (non-dimensional)
 
 };
 
@@ -166,6 +168,7 @@ struct Controls
 	PetscInt    Passive_Tracer; // Flag to activate passive tracer routine
 	PetscScalar Adiabatic_gr;   // Adiabatic gradient
 
+	PetscInt    actKatzMelt;    // Flag to activate Katz (2003) melting model (decouples T from Stokes)
 	PetscInt    actDike;        // Flag to activate dike, additional term on RHS of divergence
 
   PetscInt    useTk;     // activation flag for using temperature-dependent conductivity

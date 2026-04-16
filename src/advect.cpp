@@ -925,9 +925,11 @@ PetscErrorCode ADVAdvectMark(AdvCtx *actx)
 		// update pressure & temperature variables
 		P->p += lp[sz+K][sy+J][sx+I]  	- 	svCell->svBulk.pn;
 		P->T += lT[sz+K][sy+J][sx+I] 	-	svCell->svBulk.Tn;
-		P->F += svCell->svBulk.mf 		- 	svCell->svBulk.Fn;
-		if(P->F < 0.0) P->F = 0.0;
-		if(P->F > 1.0) P->F = 1.0;
+		if(actx->jr->ctrl.actKatzMelt) {
+			P->F += svCell->svBulk.mf - svCell->svBulk.Fn;
+			if(P->F < 0.0) P->F = 0.0;
+			if(P->F > 1.0) P->F = 1.0;
+		}
 
 		// override temperature of air phase
 		if(AirPhase != -1 && P->phase == AirPhase) P->T = Ttop;
@@ -1829,6 +1831,7 @@ PetscErrorCode ADVInterpMarkToCell(AdvCtx *actx)
 		svCell->U[1]       = 0.0;
 		svCell->U[2]       = 0.0;
 		svCell->svBulk.Fn   = 0.0;
+		svCell->svBulk.dFdT = 0.0;
 	}
 
 	// scan ALL markers
@@ -1873,7 +1876,7 @@ PetscErrorCode ADVInterpMarkToCell(AdvCtx *actx)
 		svCell->U[0]      += w*P->U[0];
 		svCell->U[1]      += w*P->U[1];
 		svCell->U[2]      += w*P->U[2];
-		svCell->svBulk.Fn += w * P->F;
+		if(actx->jr->ctrl.actKatzMelt) svCell->svBulk.Fn += w * P->F;
 	}
 
 	// normalize interpolated values

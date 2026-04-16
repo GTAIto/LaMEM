@@ -425,8 +425,30 @@ PetscErrorCode JacResGetTempRes(JacRes *jr, PetscScalar dt)
 	PetscScalar ***vx,***vy,***vz;
 	PetscScalar y_c;
 	
+	PetscScalar    diag_Teq_at_max, diag_Tc_at_max, diag_Fn_at_max, diag_Tn_at_max, diag_Plith_at_max;
+	PetscScalar    diag_x_at_max, diag_z_at_max;          // #1 spatial location of max melt cell (km)
+	PetscScalar    local_max_mf;
+	PetscScalar    local_mf_vol_sum, local_vol_sum;        // #2 for volume-averaged melt fraction
+	PetscScalar    local_max_dFdt, local_min_dFdt;         // #3 peak melting / refreezing rate
+	PetscInt       local_n_melting, local_n_refreezing;    // #2 cell counts
 	PetscErrorCode ierr;
 	PetscFunctionBeginUser;
+
+	// diagnostic tracking for melt fraction
+	local_max_mf       = 0.0;
+	diag_Teq_at_max    = 0.0;
+	diag_Tc_at_max     = 0.0;
+	diag_Fn_at_max     = 0.0;
+	diag_Tn_at_max     = 0.0;
+	diag_Plith_at_max  = 0.0;
+	diag_x_at_max      = 0.0;
+	diag_z_at_max      = 0.0;
+	local_mf_vol_sum   = 0.0;
+	local_vol_sum      = 0.0;
+	local_max_dFdt     = 0.0;
+	local_min_dFdt     = 0.0;
+	local_n_melting    = 0;
+	local_n_refreezing = 0;
 
 	// access residual context variables
 	fs    = jr->fs;
@@ -543,7 +565,7 @@ PetscErrorCode JacResGetTempRes(JacRes *jr, PetscScalar dt)
 
 		// Latent heat of melting (Katz)
 		PetscScalar Hl = 0.0;
-		if(svBulk->dFdt != 0.0)
+		if(jr->ctrl.actKatzMelt && svBulk->dFdt != 0.0)
 		{
 			PetscScalar DS_nd = 300.0 / jr->scal->cpecific_heat;  // DS=300 J/kg/K, non-dimensionalized
 			Hl = svBulk->rho * DS_nd * Tc * svBulk->dFdt;
@@ -561,7 +583,47 @@ PetscErrorCode JacResGetTempRes(JacRes *jr, PetscScalar dt)
 		// to get positive diagonal in the preconditioner matrix
 		// put right hand side to the left, which gives the following:
 
+		// track diagnostics for Katz melt
+		if(jr->ctrl.actKatzMelt)
+		{
+			// #1: record state at the cell with the global maximum melt fraction
+			if(svBulk->mf > local_max_mf)
+			{
+				local_max_mf      = svBulk->mf;
+				diag_Teq_at_max   = svBulk->Teq * jr->scal->temperature - jr->scal->Tshift;
+				diag_Tc_at_max    = Tc * jr->scal->temperature - jr->scal->Tshift;
+				diag_Fn_at_max    = svBulk->Fn;
+				diag_Tn_at_max    = Tn * jr->scal->temperature - jr->scal->Tshift;
+				diag_Plith_at_max = Pc * jr->scal->stress_si / 1.0e9;
+				// #1 spatial location (convert non-dim coords to km)
+				diag_x_at_max     = COORD_CELL(i, sx, fs->dsx) * jr->scal->length / 1.0e3;
+				diag_z_at_max     = COORD_CELL(k, sz, fs->dsz) * jr->scal->length / 1.0e3;
+			}
+
+			// #2: accumulate volume-weighted melt fraction and count melting/refreezing cells
+			if(svBulk->mf > 0.0)
+			{
+				local_mf_vol_sum += svBulk->mf * dx * dy * dz;
+				local_vol_sum    += dx * dy * dz;
+				if(svBulk->dFdt > 0.0) local_n_melting++;
+				if(svBulk->dFdt < 0.0) local_n_refreezing++;
+			}
+
+			// #3: track peak melting and refreezing rates across the domain
+			if(svBulk->dFdt > local_max_dFdt) local_max_dFdt = svBulk->dFdt;
+			if(svBulk->dFdt < local_min_dFdt) local_min_dFdt = svBulk->dFdt;
+		}
+
+		// In melt zone: enforce T = T_eq as Dirichlet constraint (equilibrium melting)
+		// Only apply when actively melting (mf >= Fn), not when refreezing (mf < Fn)
+		//if(jr->ctrl.actKatzMelt && svBulk->mf > 0.0 && svBulk->Teq > 0.0 && svBulk->mf >= svBulk->Fn)
+		//{
+		//	ge[k][j][i] = Tc - svBulk->Teq;
+		//}
+		//else
+		//{
 		ge[k][j][i] = rho_Cp*(invdt*(Tc - Tn)) - (fqx - bqx)/dx - (fqy - bqy)/dy - (fqz - bqz)/dz - Hr - rho_A - Ha + Hl;
+		//}
 	}
 	END_STD_LOOP
 
@@ -577,6 +639,65 @@ PetscErrorCode JacResGetTempRes(JacRes *jr, PetscScalar dt)
 	PetscCall(DMDAVecRestoreArray(fs->DA_Z,   jr->lvz,     &vz) );
 	PetscCall(DMDAVecRestoreArray(fs->DA_CEN, jr->lp_lith, &P)  );
 
+	// print diagnostic: max melt fraction info this timestep
+	if(jr->ctrl.actKatzMelt)
+	{
+		// --- #1 + #4: max melt cell — use MPI_MAXLOC so the winning rank broadcasts all its values ---
+		{
+			struct { PetscScalar val; PetscMPIInt rank; } local_pair, global_pair;
+			PetscScalar bcast_vals[7]; // Teq, Tc, Fn, Tn, Plith, x(km), z(km)
+			PetscCallMPI(MPI_Comm_rank(PETSC_COMM_WORLD, &local_pair.rank));
+			local_pair.val = local_max_mf;
+			PetscCallMPI(MPI_Allreduce(&local_pair, &global_pair, 1, MPI_DOUBLE_INT, MPI_MAXLOC, PETSC_COMM_WORLD));
+			bcast_vals[0] = diag_Teq_at_max;
+			bcast_vals[1] = diag_Tc_at_max;
+			bcast_vals[2] = diag_Fn_at_max;
+			bcast_vals[3] = diag_Tn_at_max;
+			bcast_vals[4] = diag_Plith_at_max;
+			bcast_vals[5] = diag_x_at_max;   // #1 location
+			bcast_vals[6] = diag_z_at_max;   // #1 location
+			PetscCallMPI(MPI_Bcast(bcast_vals, 7, MPI_DOUBLE, global_pair.rank, PETSC_COMM_WORLD));
+			// #4: Tc - Teq shown explicitly (positive = supersolidus, negative = refreezing)
+			PetscCall(PetscPrintf(PETSC_COMM_WORLD,
+				"[KATZ DIAG TS=%lld] max_mf=%.6f  Teq(C)=%.2f  Tc(C)=%.2f  dT=%.2f  Fn=%.6f  Plith(GPa)=%.4f  x(km)=%.1f  z(km)=%.1f\n",
+				(long long)jr->ts->istep, global_pair.val,
+				bcast_vals[0], bcast_vals[1],
+				bcast_vals[1] - bcast_vals[0],  // Tc - Teq
+				bcast_vals[2], bcast_vals[4],
+				bcast_vals[5], bcast_vals[6]));
+		}
+
+		// --- #2: domain-wide melt budget (volume-averaged melt fraction, cell counts) ---
+		{
+			PetscScalar sum_buf[2], gsum_buf[2];
+			PetscInt    cnt_buf[2], gcnt_buf[2];
+			sum_buf[0] = local_mf_vol_sum;
+			sum_buf[1] = local_vol_sum;
+			cnt_buf[0] = local_n_melting;
+			cnt_buf[1] = local_n_refreezing;
+			PetscCallMPI(MPI_Allreduce(sum_buf, gsum_buf, 2, MPI_DOUBLE, MPI_SUM, PETSC_COMM_WORLD));
+			PetscCallMPI(MPI_Allreduce(cnt_buf, gcnt_buf, 2, MPI_INT,    MPI_SUM, PETSC_COMM_WORLD));
+			PetscScalar mean_mf = (gsum_buf[1] > 0.0) ? gsum_buf[0] / gsum_buf[1] : 0.0;
+			PetscCall(PetscPrintf(PETSC_COMM_WORLD,
+				"[KATZ BUDGET TS=%lld] mean_mf=%.6f  n_melting=%d  n_refreezing=%d\n",
+				(long long)jr->ts->istep, mean_mf, gcnt_buf[0], gcnt_buf[1]));
+		}
+
+		// --- #3: peak melt and refreeze rates across domain ---
+		{
+			PetscScalar rate_buf[2], grate_buf[2];
+			rate_buf[0] =  local_max_dFdt;   // max melting rate (reduce with MAX)
+			rate_buf[1] = -local_min_dFdt;   // max refreezing magnitude (negate, reduce with MAX)
+			PetscCallMPI(MPI_Allreduce(rate_buf, grate_buf, 2, MPI_DOUBLE, MPI_MAX, PETSC_COMM_WORLD));
+			// convert non-dimensional dFdt → 1/Myr  (dFdt_nd / scal_time_si * s_per_Myr)
+			PetscScalar nd_to_Myr = 3.15576e13 / jr->scal->time_si;
+			PetscCall(PetscPrintf(PETSC_COMM_WORLD,
+				"[KATZ RATES TS=%lld] max_melt=%.4e  max_refreeze=%.4e  [1/Myr]\n",
+				(long long)jr->ts->istep,
+				 grate_buf[0] * nd_to_Myr,
+				 grate_buf[1] * nd_to_Myr));
+		}
+	}
 
 	// impose primary temperature constraints
 	PetscCall(VecGetArray(jr->ge, &e));
@@ -695,6 +816,14 @@ PetscErrorCode JacResGetTempMat(JacRes *jr, PetscScalar dt)
 		col[5].k = Kp1; col[5].j = j;   col[5].i = i;   col[5].c = 0;
 		col[6].k = k;   col[6].j = j;   col[6].i = i;   col[6].c = 0;
 
+		//if(jr->ctrl.actKatzMelt && svBulk->mf > 0.0 && svBulk->Teq > 0.0 && svBulk->mf >= svBulk->Fn)
+		//{
+			// Dirichlet constraint: T = T_eq in melt zone (only when actively melting)
+		//	v[0]=0.0; v[1]=0.0; v[2]=0.0; v[3]=0.0; v[4]=0.0; v[5]=0.0;
+		//	v[6]=1.0;
+		//}
+		//else
+		//{
 		// set values including TPC multipliers
 		v[0] = -bkx/bdx/dx*cf[0];
 		v[1] = -fkx/fdx/dx*cf[1];
@@ -706,7 +835,15 @@ PetscErrorCode JacResGetTempMat(JacRes *jr, PetscScalar dt)
 		+       (bkx/bdx + fkx/fdx)/dx
 		+       (bky/bdy + fky/fdy)/dy
 		+       (bkz/bdz + fkz/fdz)/dz
-		+       svBulk->rho * (300.0 / jr->scal->cpecific_heat) * svBulk->dFdt;
+		// Latent heat contribution to Jacobian diagonal:
+		//   d(Hl)/d(Tc) = rho*DS/dt*(F-Fn) + rho*DS*Tc/dt*dF/dTc
+		//                 ^^^^^^^^^^^^^^^^         ^^^^^^^^^^^^^^^
+		//                 (from dFdt term)         (previously missing)
+		// Using the stored dFdT = dF/dTc gives the full effective heat capacity,
+		// so the SNES solver sees the correct stiffness without locking T to Teq.
+		+       svBulk->rho * (300.0 / jr->scal->cpecific_heat) * svBulk->dFdt
+		+       svBulk->rho * (300.0 / jr->scal->cpecific_heat) * Tc * svBulk->dFdT * invdt;
+		//}
 
 		// set matrix coefficients
 		PetscCall(MatSetValuesStencil(jr->Att, 1, row, 7, col, v, ADD_VALUES));

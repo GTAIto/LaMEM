@@ -570,6 +570,22 @@ PetscErrorCode PVOutWriteMeltFraction(OutVec* outvec)
 	PetscFunctionReturn(0);
 }
 //---------------------------------------------------------------------------
+PetscErrorCode PVOutWriteKatzTemp(OutVec* outvec)
+{
+	COPY_FUNCTION_HEADER
+
+	// macros to copy Katz equilibrium temperature to buffer
+	#define GET_TEQ_CENTER  buff[k][j][i] = jr->svCell[iter++].svBulk.Teq;
+
+	cf = scal->temperature;
+
+	COPY_TO_LOCAL_BUFFER(fs->DA_CEN, outbuf->lbcen, GET_TEQ_CENTER)
+	ierr = InterpCenterCorner(fs, outbuf->lbcen, outbuf->lbcor, iflag); CHKERRQ(ierr);
+	if(!iflag.update) { ierr = OutBufPut3DVecComp(outbuf, 1, 0, cf, scal->Tshift); CHKERRQ(ierr); }
+
+	PetscFunctionReturn(0);
+}
+//---------------------------------------------------------------------------
 PetscErrorCode PVOutWriteMeltRate(OutVec* outvec)
 {
     COPY_FUNCTION_HEADER
