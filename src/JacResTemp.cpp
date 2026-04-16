@@ -522,7 +522,7 @@ PetscErrorCode JacResGetTempRes(JacRes *jr, PetscScalar dt)
 		// Compute the pressure gradient
 		if(jr->ctrl.initGuess == 0)
 		{
-<	        bdpdx = ((Pc - P[k][j][Im1])/bdx)*vx[k][j][i];        fdpdx = ((P[k][j][Ip1] - Pc)/fdx)*vx[k][j][i+1];
+	        bdpdx = ((Pc - P[k][j][Im1])/bdx)*vx[k][j][i];        fdpdx = ((P[k][j][Ip1] - Pc)/fdx)*vx[k][j][i+1];
 	        bdpdy = ((Pc - P[k][Jm1][i])/bdy)*vy[k][j][i];        fdpdy = ((P[k][Jp1][i] - Pc)/fdy)*vy[k][j+1][i];
  	        bdpdz = ((Pc - P[Km1][j][i])/bdz)*vz[k][j][i];        fdpdz = ((P[Kp1][j][i] - Pc)/fdz)*vz[k+1][j][i];
 	         //if on bottom boundary assume dpdz is constant across the cell.
