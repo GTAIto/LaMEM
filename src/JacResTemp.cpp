@@ -528,10 +528,9 @@ PetscErrorCode JacResGetTempRes(JacRes *jr, PetscScalar dt)
 		{
 			bdpdx = ((Pc - P[k][j][Im1])/bdx)*vx[k][j][i];        fdpdx = ((P[k][j][Ip1] - Pc)/fdx)*vx[k][j][i+1];
 			bdpdy = ((Pc - P[k][Jm1][i])/bdy)*vy[k][j][i];        fdpdy = ((P[k][Jp1][i] - Pc)/fdy)*vy[k][j+1][i];
- 			bdpdz = ((Pc - P[k-1][j][i])/bdz)*vz[k][j][i];   fdpdz = ((P[k+1][j][i] - Pc)/fdz)*vz[k+1][j][i];
+ 			bdpdz = ((Pc - P[km1][j][i])/bdz)*vz[k][j][i];   fdpdz = ((P[kp1][j][i] - Pc)/fdz)*vz[k+1][j][i];
             //if on bottom or top boundary use the same dpdz above/below with the correct vz.
             if (k==0) bdpdz = ((P[k+1][j][i] - Pc)/fdz)*vz[k][j][i];  
-            if (k==mz) fdpdz = ((Pc - P[k-1][j][i])/bdz)*vz[k+1][j][i];
 			// Adiabatic Heat term
 			Ha = jr->ctrl.AdiabHeat*(Tc*svBulk->alpha*((bdpdx+fdpdx)*0.5+(bdpdy+fdpdy)*0.5+(bdpdz+fdpdz)*0.5));
 		}
