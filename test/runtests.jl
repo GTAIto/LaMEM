@@ -1099,5 +1099,62 @@ end
     clean_test_directory(dir)
 end
 
+
+@testset "t34_3D_2D_push_block" begin
+    cd(test_dir)
+    dir = "t34_3D_2D_push_block";
+    
+    ParamFile = "3D_push_block.dat";
+    
+    keywords = ("|Div|_inf","|Div|_2","|mRes|_2")
+    acc      = ((rtol=1e-6,atol=1e-10), (rtol=1e-5,atol=1e-10), (rtol=1e-4,atol=1e-10));
+    
+    # Test 3D Bezier push block functionality
+    @test perform_lamem_test(dir,ParamFile,"3D_push_block_opt-p1.expected", 
+                            keywords=keywords, accuracy=acc, cores=1, opt=true, mpiexec=mpiexec)
+
+    # Test 2D Bezier push block functionality (push along x-axis only)
+    ParamFile = "2D_push_block.dat";
+    @test perform_lamem_test(dir,ParamFile,"2D_push_block_opt-p1.expected", 
+                            keywords=keywords, accuracy=acc, cores=1, opt=true, mpiexec=mpiexec)
+@testset "t34_TopoDiffusion" begin
+    cd(test_dir)
+    dir = "t34_TopoDiffusion"
+    include(joinpath(dir, "t34_CreateSetup.jl"))
+
+    keywords = ("|Div|_inf", "|Div|_2", "|mRes|_2")
+    acc      = ((rtol=1e-6, atol=1e-6), (rtol=1e-5, atol=5e-5), (rtol=2.5e-4, atol=1e-4))
+
+    ParamFile = "t34_TopoDiffusion.dat"
+
+    t34_CreateSetup(dir, ParamFile; NumberCores=1, mpiexec=mpiexec)
+
+    @test perform_lamem_test(dir, ParamFile, "t34_TopoDiffusion_opt-p1.expected";
+        args     = "-nstep_max 3",
+        keywords = keywords,
+        accuracy = acc,
+        cores    = 1,
+        opt      = true,
+        mpiexec  = mpiexec,
+    )
 end
 
+@testset "t34_spatially_limited_erosion" begin
+    cd(test_dir)
+    dir = "t34_spatially_limited_erosion";
+    include(joinpath(dir,"CreateMarkers_t34_SingleCore.jl"));
+
+    keywords = ("|Div|_inf","|Div|_2","|mRes|_2")
+    acc      = ((rtol=1e-6,atol=1e-6), (rtol=1e-5, atol=5e-5), (rtol=2.5e-4,atol=1e-4));
+
+    ParamFile = "spatially_limited_erosion.dat"
+
+    CreateMarkers_t34_SingleCore(dir, ParamFile, NumberCores=1, mpiexec=mpiexec)
+    @test perform_lamem_test(dir, ParamFile, "spatially_limited_erosion_opt-p1.expected",
+                            args="-nstep_max 2",
+                            keywords=keywords, accuracy=acc, cores=1, opt=true, mpiexec=mpiexec)
+end
+
+end
+
+end

@@ -409,9 +409,8 @@ PetscErrorCode JacResGetTempRes(JacRes *jr, PetscScalar dt)
 	FDSTAG     *fs;
 	BCCtx      *bc;
 	SolVarCell *svCell;
-       	SolVarDev  *svDev;
+	SolVarDev  *svDev;
 	SolVarBulk *svBulk;
-	Controls   ctrl;
 	PetscInt    iter, num, *list;
 	PetscInt    Ip1, Im1, Jp1, Jm1, Kp1, Km1;
 	PetscInt    i, j, k, nx, ny, nz, sx, sy, sz, mx, my, mz;
@@ -524,6 +523,7 @@ PetscErrorCode JacResGetTempRes(JacRes *jr, PetscScalar dt)
 		Jp1 = j+1; if(Jp1 > my) Jp1--;
 		Km1 = k-1; if(Km1 < 0)  Km1++;
 		Kp1 = k+1; if(Kp1 > mz) Kp1--;
+    
 
 		// to output as a paraview-field
 		cond = kc;
@@ -547,16 +547,17 @@ PetscErrorCode JacResGetTempRes(JacRes *jr, PetscScalar dt)
 		// Compute the pressure gradient
 		if(jr->ctrl.initGuess == 0)
 		{
-			bdpdx = ((Pc - P[k][j][i-1])/bdx)*vx[k][j][i];        fdpdx = ((P[k][j][i+1] - Pc)/fdx)*vx[k][j][i+1];
-			bdpdy = ((Pc - P[k][j-1][i])/bdy)*vy[k][j][i];        fdpdy = ((P[k][j+1][i] - Pc)/fdy)*vy[k][j+1][i];
-			bdpdz = ((Pc - P[k-1][j][i])/bdz)*vz[k][j][i];        fdpdz = ((P[k+1][j][i] - Pc)/fdz)*vz[k+1][j][i];
-
-			// Adiabatic Heat term
-			Ha = jr->ctrl.AdiabHeat*(Tc*svBulk->alpha*((bdpdx+fdpdx)*0.5+(bdpdy+fdpdy)*0.5+(bdpdz+fdpdz)*0.5));
+	        bdpdx = ((Pc - P[k][j][Im1])/bdx)*vx[k][j][i];        fdpdx = ((P[k][j][Ip1] - Pc)/fdx)*vx[k][j][i+1];
+	        bdpdy = ((Pc - P[k][Jm1][i])/bdy)*vy[k][j][i];        fdpdy = ((P[k][Jp1][i] - Pc)/fdy)*vy[k][j+1][i];
+ 	        bdpdz = ((Pc - P[Km1][j][i])/bdz)*vz[k][j][i];        fdpdz = ((P[Kp1][j][i] - Pc)/fdz)*vz[k+1][j][i];
+	         //if on bottom boundary assume dpdz is constant across the cell.
+	        if (k==0) bdpdz = ((P[k+1][j][i] - Pc)/fdz)*vz[k][j][i];  
+	        // Adiabatic Heat term
+	        Ha = jr->ctrl.AdiabHeat*(Tc*svBulk->alpha*((bdpdx+fdpdx)*0.5+(bdpdy+fdpdy)*0.5+(bdpdz+fdpdz)*0.5));
 		}
 		else
 		{
-			Ha = 0.0;
+	        Ha = 0.0;
 		}
 
 		svBulk->Ha = Ha;
@@ -570,7 +571,7 @@ PetscErrorCode JacResGetTempRes(JacRes *jr, PetscScalar dt)
 			PetscScalar DS_nd = 300.0 / jr->scal->cpecific_heat;  // DS=300 J/kg/K, non-dimensionalized
 			Hl = svBulk->rho * DS_nd * Tc * svBulk->dFdt;
 		}
-
+		
 		// get mesh steps
 		dx = SIZE_CELL(i, sx, fs->dsx);
 		dy = SIZE_CELL(j, sy, fs->dsy);

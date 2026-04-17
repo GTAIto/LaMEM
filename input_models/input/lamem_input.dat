@@ -128,11 +128,13 @@
     surf_max_angle     = 45.0             # maximum angle with horizon (smoothed if larger)
     surf_topo_file     = ./input/topo.dat # initial topography file (redundant)
     
-    erosion_model      = 2                # erosion model [0-none (default), 1-infinitely fast, 2-prescribed rate with given level]
+    erosion_model      = 2                # erosion model [0-none (default), 1-infinitely fast, 2-prescribed rate with given level, 3-spatially limited]
     er_num_phases      = 3                # number of erosion phases
     er_time_delims     = 0.5   2.5        # erosion time delimiters (one less than number)
     er_rates           = 0.2 0.1 0.2      # constant erosion rates in different time periods
     er_levels          = 1   2   1        # levels above which we apply constant erosion rates in different time periods
+    er_x_min           = -10 -10 -10      # minimum x-coordinates for erosion (model 3 only, one per phase)
+    er_x_max           = 10  10  10       # maximum x-coordinates for erosion (model 3 only, one per phase)
 
     sediment_model     = 1                # sedimentation model [0-none (dafault), 1-prescribed rate with given level, 2-cont. margin]
     sed_num_layers     = 3                # number of sediment layers
@@ -146,6 +148,10 @@
     hUp                = 1.5              # up dip thickness of sediment cover (onshore)
     hDown              = 0.1              # down dip thickness of sediment cover (off shore)
     dTrans             = 1.0              # half of transition zone
+
+    # Topographic diffusion (runs after erosion/sedimentation each time step)
+    topo_diff          = 0                # topographic diffusion flag [0-none (default), 1-active]
+  # topo_diffusivity   = 1e-5            # topographic diffusivity [m^2/s] (required when topo_diff=1)
 
 #===============================================================================
 # Boundary conditions
@@ -180,15 +186,18 @@
     bg_ref_point     = 0.0 0.0 0.0       # background strain rate reference point (fixed)
 
 # Bezier blocks (single entry per block)
+# path_dim = 2 (default): 2D path in x-y plane, path contains (x,y) coordinates
+# path_dim = 3: 3D path, path contains (x,y,z) coordinates
     <BCBlockStart>
-        npath =  2                                 # Number of path points of Bezier curve (path-points only!)
-        theta =  0.0 5.0                           # Orientation angles at path points (counter-clockwise positive)
-        time  =  1.0 2.0                           # Times at path points
-        path  =  0.0 0.0 0.0 10.0                  # Path points x-y coordinates
-        npoly =  4                                 # Number of polygon vertices
-        poly  =  0.0 0.0 0.1 0.0 0.1 0.1 0.0 0.1   # Polygon x-y coordinates at initial time
-        bot   =  0.0                               # Polygon bottom coordinate
-        top   =  0.1                               # Polygon top coordinate
+        npath    =  2                                 # Number of path points of Bezier curve (path-points only!)
+        path_dim =  2                                 # Path dimension: 2 = x-y plane (default), 3 = x-y-z
+        theta    =  0.0 5.0                           # Orientation angles at path points (counter-clockwise positive)
+        time     =  1.0 2.0                           # Times at path points
+        path     =  0.0 0.0 0.0 10.0                  # Path points x-y coordinates (or x-y-z if path_dim=3)
+        npoly    =  4                                 # Number of polygon vertices
+        poly     =  0.0 0.0 0.1 0.0 0.1 0.1 0.0 0.1   # Polygon x-y coordinates at initial time
+        bot      =  0.0                               # Polygon bottom coordinate
+        top      =  0.1                               # Polygon top coordinate
     <BCBlockEnd>
 
 # Internal velocity box(es)
