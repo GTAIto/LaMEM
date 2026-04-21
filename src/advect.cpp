@@ -1831,7 +1831,6 @@ PetscErrorCode ADVInterpMarkToCell(AdvCtx *actx)
 		svCell->U[1]       = 0.0;
 		svCell->U[2]       = 0.0;
 		svCell->svBulk.Fn   = 0.0;
-		svCell->svBulk.dFdT = 0.0;
 	}
 
 	// scan ALL markers

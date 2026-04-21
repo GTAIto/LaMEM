@@ -411,7 +411,6 @@ PetscErrorCode JacResGetTempRes(JacRes *jr, PetscScalar dt)
 	SolVarCell *svCell;
 	SolVarDev  *svDev;
 	SolVarBulk *svBulk;
-	Controls   ctrl;
 	PetscInt    iter, num, *list;
 	PetscInt    Ip1, Im1, Jp1, Jm1, Kp1, Km1;
 	PetscInt    i, j, k, nx, ny, nz, sx, sy, sz, mx, my, mz;
@@ -433,9 +432,6 @@ PetscErrorCode JacResGetTempRes(JacRes *jr, PetscScalar dt)
 	bc    = jr->bc;
 	num   = bc->tNumSPC;
 	list  = bc->tSPCList;
-
-	// access controls
-	ctrl = jr->ctrl;
 
 	// initialize maximum cell index in all directions
 	mx = fs->dsx.tcels - 1;
@@ -562,37 +558,6 @@ PetscErrorCode JacResGetTempRes(JacRes *jr, PetscScalar dt)
 
 		// to get positive diagonal in the preconditioner matrix
 		// put right hand side to the left, which gives the following:
-
-		// track diagnostics for Katz melt
-		if(jr->ctrl.actKatzMelt)
-		{
-			// #1: record state at the cell with the global maximum melt fraction
-			if(svBulk->mf > local_max_mf)
-			{
-				local_max_mf      = svBulk->mf;
-				diag_Teq_at_max   = svBulk->Teq * jr->scal->temperature - jr->scal->Tshift;
-				diag_Tc_at_max    = Tc * jr->scal->temperature - jr->scal->Tshift;
-				diag_Fn_at_max    = svBulk->Fn;
-				diag_Tn_at_max    = Tn * jr->scal->temperature - jr->scal->Tshift;
-				diag_Plith_at_max = Pc * jr->scal->stress_si / 1.0e9;
-				// #1 spatial location (convert non-dim coords to km)
-				diag_x_at_max     = COORD_CELL(i, sx, fs->dsx) * jr->scal->length / 1.0e3;
-				diag_z_at_max     = COORD_CELL(k, sz, fs->dsz) * jr->scal->length / 1.0e3;
-			}
-
-			// #2: accumulate volume-weighted melt fraction and count melting/refreezing cells
-			if(svBulk->mf > 0.0)
-			{
-				local_mf_vol_sum += svBulk->mf * dx * dy * dz;
-				local_vol_sum    += dx * dy * dz;
-				if(svBulk->dFdt > 0.0) local_n_melting++;
-				if(svBulk->dFdt < 0.0) local_n_refreezing++;
-			}
-
-			// #3: track peak melting and refreezing rates across the domain
-			if(svBulk->dFdt > local_max_dFdt) local_max_dFdt = svBulk->dFdt;
-			if(svBulk->dFdt < local_min_dFdt) local_min_dFdt = svBulk->dFdt;
-		}
 
 		ge[k][j][i] = rho_Cp*(invdt*(Tc - Tn)) - (fqx - bqx)/dx - (fqy - bqy)/dy - (fqz - bqz)/dz - Hr - rho_A - Ha + Hl;
 	}
