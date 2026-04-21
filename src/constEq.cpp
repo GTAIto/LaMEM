@@ -660,8 +660,6 @@ PetscErrorCode volConstEq(ConstEqCtx *ctx)
 	svBulk->IKdt   = 0.0;
 	Kavg           = 0.0;
 	svBulk->mf     = 0.0;
-	svBulk->Teq    = 0.0;
-	svBulk->dFdT   = 0.0;
 	svBulk->rho_pf = 0.0;
 
 	// scan all phases
@@ -711,9 +709,6 @@ PetscErrorCode volConstEq(ConstEqCtx *ctx)
 				dF = PetscMax(F_katz - svBulk->Fn, 0.0); // F is the extented depletion, we don't allow freezing
 				svBulk->mf = svBulk->Fn + (phRat[i]*dF);
 				
-				PetscScalar T_eq_C = MPgetTEquilib(P_GPa, F_katz, mat->X_water, mat->M_cpx, &mp);
-				svBulk->Teq += phRat[i] * (T_eq_C + ctx->scal->Tshift) / ctx->scal->temperature;
-
 			}
 
 			// initialize

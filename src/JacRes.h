@@ -61,9 +61,7 @@ struct SolVarBulk
 	PetscScalar  Ha ;    // Adiabatic heating
     PetscScalar  cond ;  // conductivity
 	PetscScalar  mf;     // Katz melt fraction (current timestep)
-	PetscScalar  Teq;    // Katz equilibrium temperature (non-dimensional)
-	PetscScalar  dFdT;   // d(mf)/d(T): sensitivity of Katz melt fraction to temperature (non-dimensional)
-
+	
 };
 
 //---------------------------------------------------------------------------

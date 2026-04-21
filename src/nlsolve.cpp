@@ -625,13 +625,6 @@ PetscErrorCode SNESCoupledTest(
 
 	if(jr->ctrl.actTemp)
 	{
-		// When Katz melting is active, the T=Teq Dirichlet constraint couples
-		// temperature to the Stokes solution and causes Picard oscillation.
-		// Temperature is instead solved once after SNES converges in LaMEMLibSolveTemp
-		// (operator splitting). For models without Katz melting, the original
-		// coupled solve runs here as before.
-		if(jr->ctrl.actKatzMelt) PetscFunctionReturn(0);
-
 		ierr = JacResGetTempRes(jr, jr->ts->dt);            CHKERRQ(ierr);
 		ierr = JacResGetTempMat(jr, jr->ts->dt);            CHKERRQ(ierr);
 		ierr = KSPSetOperators(jr->tksp, jr->Att, jr->Att); CHKERRQ(ierr);
