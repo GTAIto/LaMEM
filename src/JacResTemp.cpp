@@ -616,16 +616,7 @@ PetscErrorCode JacResGetTempRes(JacRes *jr, PetscScalar dt)
 			if(svBulk->dFdt < local_min_dFdt) local_min_dFdt = svBulk->dFdt;
 		}
 
-		// In melt zone: enforce T = T_eq as Dirichlet constraint (equilibrium melting)
-		// Only apply when actively melting (mf >= Fn), not when refreezing (mf < Fn)
-		//if(jr->ctrl.actKatzMelt && svBulk->mf > 0.0 && svBulk->Teq > 0.0 && svBulk->mf >= svBulk->Fn)
-		//{
-		//	ge[k][j][i] = Tc - svBulk->Teq;
-		//}
-		//else
-		//{
 		ge[k][j][i] = rho_Cp*(invdt*(Tc - Tn)) - (fqx - bqx)/dx - (fqy - bqy)/dy - (fqz - bqz)/dz - Hr - rho_A - Ha + Hl;
-		//}
 	}
 	END_STD_LOOP
 
@@ -818,14 +809,6 @@ PetscErrorCode JacResGetTempMat(JacRes *jr, PetscScalar dt)
 		col[5].k = Kp1; col[5].j = j;   col[5].i = i;   col[5].c = 0;
 		col[6].k = k;   col[6].j = j;   col[6].i = i;   col[6].c = 0;
 
-		//if(jr->ctrl.actKatzMelt && svBulk->mf > 0.0 && svBulk->Teq > 0.0 && svBulk->mf >= svBulk->Fn)
-		//{
-			// Dirichlet constraint: T = T_eq in melt zone (only when actively melting)
-		//	v[0]=0.0; v[1]=0.0; v[2]=0.0; v[3]=0.0; v[4]=0.0; v[5]=0.0;
-		//	v[6]=1.0;
-		//}
-		//else
-		//{
 		// set values including TPC multipliers
 		v[0] = -bkx/bdx/dx*cf[0];
 		v[1] = -fkx/fdx/dx*cf[1];
@@ -836,16 +819,7 @@ PetscErrorCode JacResGetTempMat(JacRes *jr, PetscScalar dt)
 		v[6] =  invdt*rho_Cp
 		+       (bkx/bdx + fkx/fdx)/dx
 		+       (bky/bdy + fky/fdy)/dy
-		+       (bkz/bdz + fkz/fdz)/dz
-		// Latent heat contribution to Jacobian diagonal:
-		//   d(Hl)/d(Tc) = rho*DS/dt*(F-Fn) + rho*DS*Tc/dt*dF/dTc
-		//                 ^^^^^^^^^^^^^^^^         ^^^^^^^^^^^^^^^
-		//                 (from dFdt term)         (previously missing)
-		// Using the stored dFdT = dF/dTc gives the full effective heat capacity,
-		// so the SNES solver sees the correct stiffness without locking T to Teq.
-		+       svBulk->rho * (300.0 / jr->scal->cpecific_heat) * svBulk->dFdt
-		+       svBulk->rho * (300.0 / jr->scal->cpecific_heat) * Tc * svBulk->dFdT * invdt;
-		//}
+		+       (bkz/bdz + fkz/fdz)/dz;
 
 		// set matrix coefficients
 		PetscCall(MatSetValuesStencil(jr->Att, 1, row, 7, col, v, ADD_VALUES));

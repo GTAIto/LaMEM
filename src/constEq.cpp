@@ -696,7 +696,7 @@ PetscErrorCode volConstEq(ConstEqCtx *ctx)
 			if(ctx->ctrl->actKatzMelt && mat->M_cpx > 0.0)
 			{
 				meltPar_Katz mp;
-				PetscScalar P_GPa, T_C;
+				PetscScalar P_GPa, T_C, dF;
 				setMeltParamsToDefault_Katz(&mp);
 				// Use lithostatic pressure, convert to GPa for Katz
 				P_GPa = ctx->p_lith * ctx->scal->stress_si / 1.0e9;
@@ -708,24 +708,12 @@ PetscErrorCode volConstEq(ConstEqCtx *ctx)
 				F_katz = MPgetFconsH(P_GPa, T_C, mat->X_water, mat->M_cpx, svBulk->Fn, &mp);
 				if(F_katz < 0.0) F_katz = 0.0;
 				if(F_katz > 1.0) F_katz = 1.0;
-
-    			svBulk->mf  += phRat[i] * F_katz;
+				dF = PetscMax(F_katz - svBulk->Fn, 0.0); // F is the extented depletion, we don't allow freezing
+				svBulk->mf = svBulk->Fn + (phRat[i]*dF);
+				
 				PetscScalar T_eq_C = MPgetTEquilib(P_GPa, F_katz, mat->X_water, mat->M_cpx, &mp);
 				svBulk->Teq += phRat[i] * (T_eq_C + ctx->scal->Tshift) / ctx->scal->temperature;
 
-				// Compute dF/dT numerically for the Jacobian diagonal (effective heat capacity).
-				// Perturb T by 1°C (dimensional) and evaluate MPgetFconsH at the same (P, Fn).
-				// This captures how much more melt forms if T increases by 1°C, giving the
-				// correct latent-heat stiffness without freezing T to Teq (Dirichlet approach).
-				{
-					PetscScalar dT_C   = 1.0; // 1°C perturbation (dimensional)
-					PetscScalar F_plus = MPgetFconsH(P_GPa, T_C + dT_C, mat->X_water, mat->M_cpx, svBulk->Fn, &mp);
-					if(F_plus < 0.0) F_plus = 0.0;
-					if(F_plus > 1.0) F_plus = 1.0;
-					// Convert dF/dT from per-°C to non-dimensional (1/scal->temperature)
-					PetscScalar dFdT_nd = (F_plus - F_katz) / (dT_C / ctx->scal->temperature);
-					svBulk->dFdT += phRat[i] * dFdT_nd;
-				}
 			}
 
 			// initialize
@@ -756,7 +744,7 @@ PetscErrorCode volConstEq(ConstEqCtx *ctx)
 			// the deep mantle artificially lighter than shallow mantle (unstable stratification).
 			if(mat->alpha)
 			{
-				cf_therm  = 1.0 - mat->alpha*(T - ctrl->TRef - ctrl->Adiabatic_gr*depth);
+				cf_therm  = 1.0 - mat->alpha*(T - ctrl->TRef); // - ctrl->Adiabatic_gr*depth);
 			}
 
 			// get density
@@ -790,16 +778,6 @@ PetscErrorCode volConstEq(ConstEqCtx *ctx)
 			{
 				// temperature & pressure-dependent density
 				rho = mat->rho*cf_comp*cf_therm;
-
-				// Katz melt fraction density reduction: melt is less dense than solid
-				// Apply same mfmax cap as viscosity reduction for consistency
-				//if(F_katz > 0.0)
-				//{
-				//	PetscScalar mf_eff = F_katz;
-				//	if(mf_eff > ctrl->mfmax) mf_eff = ctrl->mfmax;
-				//	PetscScalar rho_melt_katz = mat->rho_melt ? mat->rho_melt : mat->rho * 0.9;
-				//	rho = mf_eff * rho_melt_katz + (1.0 - mf_eff) * rho;
-				//}
 			}
 
 			// update density, thermal expansion & inverse bulk elastic parameter
