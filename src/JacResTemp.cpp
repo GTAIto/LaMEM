@@ -526,7 +526,7 @@ PetscErrorCode JacResGetTempRes(JacRes *jr, PetscScalar dt)
 	        bdpdy = ((Pc - P[k][Jm1][i])/bdy)*vy[k][j][i];        fdpdy = ((P[k][Jp1][i] - Pc)/fdy)*vy[k][j+1][i];
  	        bdpdz = ((Pc - P[Km1][j][i])/bdz)*vz[k][j][i];        fdpdz = ((P[Kp1][j][i] - Pc)/fdz)*vz[k+1][j][i];
 	         //if on bottom boundary assume dpdz is constant across the cell.
-	        if (k==0) bdpdz = ((P[k+1][j][i] - Pc)/fdz)*vz[k][j][i];  
+	        if (k==0) bdpdz = ((P[k+1][j][i] - Pc)/fdz)*vz[k][j][i];
 	        // Adiabatic Heat term
 	        Ha = jr->ctrl.AdiabHeat*(Tc*svBulk->alpha*((bdpdx+fdpdx)*0.5+(bdpdy+fdpdy)*0.5+(bdpdz+fdpdz)*0.5));
 		}

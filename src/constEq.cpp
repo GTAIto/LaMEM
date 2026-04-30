@@ -689,7 +689,7 @@ PetscErrorCode volConstEq(ConstEqCtx *ctx)
 				}
 			}
 			
-			// Katz (2003) melting — activates automatically when M_cpx > 0
+			// Katz (2003) melting — activates when act_katz_melt = 1 and M_cpx > 0
 			PetscScalar F_katz = 0.0;
 			if(ctx->ctrl->actKatzMelt && mat->M_cpx > 0.0)
 			{
