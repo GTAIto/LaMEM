@@ -167,6 +167,7 @@ struct Controls
 	PetscScalar Adiabatic_gr;   // Adiabatic gradient
 
 	PetscInt    actKatzMelt;    // Flag to activate Katz (2003) melting model (decouples T from Stokes)
+	PetscInt    actWaterDep;    // Flag to activate water-dependent rheology (requires C_0, phi_crit, rd/rn per phase)
 	PetscInt    actDike;        // Flag to activate dike, additional term on RHS of divergence
 
   PetscInt    useTk;     // activation flag for using temperature-dependent conductivity

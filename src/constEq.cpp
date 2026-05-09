@@ -201,11 +201,65 @@ PetscErrorCode setUpPhase(ConstEqCtx *ctx, PetscInt ID)
 		ctx->A_els = 1.0/(mat->G*dt)/2.0;
 	}
 
+	// WATER-DEPENDENT RHEOLOGY: compute C_OH from Katz melt fraction
+	PetscScalar C_OH = 0.0;
+	PetscBool   wat_dep = (PetscBool)(ctrl->actWaterDep && mat->C_0 > 0.0 && mat->phi_crit > 0.0
+									&& (mat->rd > 0.0 || mat->rn > 0.0));
+	if(wat_dep)
+	{
+		// Get D_water from Katz defaults (= 0.01)
+		meltPar_Katz mp_w;
+		setMeltParamsToDefault_Katz(&mp_w);
+		PetscScalar D = mp_w.D_water;
+
+		// Previous-timestep Katz melt fraction (cumulative depletion)
+		// svBulk is NULL at edge/face points — use F=0 (undepleted) in that case
+		PetscScalar F;
+		if(ctx->svBulk)
+		{
+			F = ctx->svBulk->Fn;
+		}
+		else
+		{
+			F = 0.0;
+		}
+
+		// Volume porosity φ → mass porosity Ø
+		// use rho_melt (rho_l) and rho (rho_s) specified in the input file
+		PetscScalar rho_l = mat->rho_melt;
+		PetscScalar rho_s = mat->rho;
+		PetscScalar phi_m = rho_l * mat->phi_crit
+						/ (rho_l * mat->phi_crit + rho_s*(1.0 - mat->phi_crit));
+
+		// C_s [wt frac]
+		PetscScalar Cs;
+		if(F <= phi_m)
+		{
+			Cs = D * mat->C_0 / (D + F*(1.0 - D));              // batch melting
+		}
+		else
+		{
+			PetscScalar ep = (1.0 - phi_m) * (1.0 - D) / ((1.0 - phi_m)*D + phi_m);
+			Cs = D * mat->C_0 / (phi_m + (1.0 - phi_m)*D)
+			* pow(1.0 - (F - phi_m), ep);                    // dynamic melting
+		}
+
+		// convert Cs (fraction) to ppm to C_OH [H/10^6 Si]
+		C_OH = (Cs * 1.0e6) / 0.0617;
+	}
+
 	// LINEAR DIFFUSION CREEP (NEWTONIAN)
 	if(mat->Bd)
 	{
 		Q          = (mat->Ed + p_visc*mat->Vd)/RT;
-		ctx->A_dif = mat->Bd*exp(-Q)*mfd;
+		ctx->A_dif = mat->Bd * exp(-Q) * mfd;
+	}
+	else if(mat->Ad && wat_dep && mat->rd > 0.0 && mat->d_mm > 0.0)
+	{
+		Q          = (mat->Ed + p_visc*mat->Vd)/RT;
+		PetscScalar d_um = mat->d_mm * 1000.0;   // mm → μm (H&K 2003)
+		PetscScalar Ad_eff = mat->Ad * pow(C_OH, mat->rd) * pow(d_um, -mat->pd);
+		ctx->A_dif = Ad_eff * exp(-Q) * mfd;
 	}
 
 	// PS-CREEP
@@ -226,7 +280,14 @@ PetscErrorCode setUpPhase(ConstEqCtx *ctx, PetscInt ID)
 	{
 		Q          = (mat->En + p_visc*mat->Vn)/RT;
 		ctx->N_dis =  mat->n;
-		ctx->A_dis =  mat->Bn*exp(-Q)*mfn;
+		ctx->A_dis =  mat->Bn * exp(-Q) * mfn;
+	}
+    else if(mat->An && wat_dep && mat->rn > 0.0)
+	{
+		Q          = (mat->En + p_visc*mat->Vn)/RT;
+		ctx->N_dis = mat->n;
+		PetscScalar An_eff = mat->An * pow(C_OH, mat->rn);
+		ctx->A_dis =  An_eff * exp(-Q) * mfn;
 	}
 
 	// DC-CREEP
@@ -703,7 +764,7 @@ PetscErrorCode volConstEq(ConstEqCtx *ctx)
 				
 				if(P_GPa < 0.0) P_GPa = 0.0;
 				
-				F_katz = MPgetFconsH(P_GPa, T_C, mat->X_water, mat->M_cpx, svBulk->Fn, &mp);
+				F_katz = MPgetFconsH(P_GPa, T_C, mat->C_0, mat->M_cpx, svBulk->Fn, &mp);
 				if(F_katz < 0.0) F_katz = 0.0;
 				if(F_katz > 1.0) F_katz = 1.0;
 				dF = PetscMax(F_katz - svBulk->Fn, 0.0); // F is the extented depletion, we don't allow freezing

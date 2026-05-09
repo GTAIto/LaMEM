@@ -388,14 +388,17 @@ PetscErrorCode DBMatReadPhase(DBMat *dbm, FB *fb, PetscBool PrintOutput)
 	// Newtonian linear diffusion creep
 	//=================================================================================
 	ierr = getScalarParam(fb, _OPTIONAL_, "eta",      &eta,      1, 1.0); CHKERRQ(ierr);
+	ierr = getScalarParam(fb, _OPTIONAL_, "Ad",       &m->Ad,    1, 1.0); CHKERRQ(ierr);
 	ierr = getScalarParam(fb, _OPTIONAL_, "Bd",       &m->Bd,    1, 1.0); CHKERRQ(ierr);
 	ierr = getScalarParam(fb, _OPTIONAL_, "Ed",       &m->Ed,    1, 1.0); CHKERRQ(ierr);
 	ierr = getScalarParam(fb, _OPTIONAL_, "Vd",       &m->Vd,    1, 1.0); CHKERRQ(ierr);
+	ierr = getScalarParam(fb, _OPTIONAL_, "d_mm",     &m->d_mm,  1, 1.0); CHKERRQ(ierr);
 	//=================================================================================
 	// power-law (dislocation) creep
 	//=================================================================================
 	ierr = getScalarParam(fb, _OPTIONAL_, "eta0",     &eta0,     1, 1.0); CHKERRQ(ierr);
 	ierr = getScalarParam(fb, _OPTIONAL_, "e0",       &e0,       1, 1.0); CHKERRQ(ierr);
+	ierr = getScalarParam(fb, _OPTIONAL_, "An",       &m->An,    1, 1.0); CHKERRQ(ierr);
 	ierr = getScalarParam(fb, _OPTIONAL_, "Bn",       &m->Bn,    1, 1.0); CHKERRQ(ierr);
 	ierr = getScalarParam(fb, _OPTIONAL_, "En",       &m->En,    1, 1.0); CHKERRQ(ierr);
 	ierr = getScalarParam(fb, _OPTIONAL_, "Vn",       &m->Vn,    1, 1.0); CHKERRQ(ierr);
@@ -458,8 +461,12 @@ PetscErrorCode DBMatReadPhase(DBMat *dbm, FB *fb, PetscBool PrintOutput)
 	//=================================================================================
 	ierr = getScalarParam(fb, _OPTIONAL_, "mfc",      &m->mfc,   1, 1.0);  CHKERRQ(ierr);
 	ierr = getScalarParam(fb, _OPTIONAL_, "rho_melt", &m->rho_melt,1, 1.0);  CHKERRQ(ierr);
-	ierr = getScalarParam(fb, _OPTIONAL_, "M_cpx",   &m->M_cpx,   1, 1.0); CHKERRQ(ierr);
-	ierr = getScalarParam(fb, _OPTIONAL_, "X_water", &m->X_water, 1, 1.0); CHKERRQ(ierr);
+	ierr = getScalarParam(fb, _OPTIONAL_, "M_cpx",    &m->M_cpx,   1, 1.0); CHKERRQ(ierr);
+	ierr = getScalarParam(fb, _OPTIONAL_, "C_0",      &m->C_0, 1, 1.0); CHKERRQ(ierr);
+	ierr = getScalarParam(fb, _OPTIONAL_, "phi_crit", &m->phi_crit, 1, 1.0); CHKERRQ(ierr);
+	ierr = getScalarParam(fb, _OPTIONAL_, "rd",       &m->rd,       1, 1.0); CHKERRQ(ierr);
+	ierr = getScalarParam(fb, _OPTIONAL_, "rn",       &m->rn,       1, 1.0); CHKERRQ(ierr);
+	ierr = getScalarParam(fb, _OPTIONAL_, "pd",       &m->pd,       1, 1.0); CHKERRQ(ierr);
 
 	if (PrintOutput)
 	{	
@@ -537,6 +544,7 @@ PetscErrorCode DBMatReadPhase(DBMat *dbm, FB *fb, PetscBool PrintOutput)
 
 	if(!(( eta0 &&  e0 &&  m->n &&  !m->Bn)   // eta0, e0, n
 	||   (!eta0 && !e0 &&  m->n &&   m->Bn)   // Bn, n
+	||   (!eta0 && !e0 &&  m->n &&  !m->Bn &&  m->An) // An, n
 	||   (!eta0 && !e0 &&  !m->n && !m->Bn)   // nothing
 	||   ( eta0 &&  e0 && m->n &&  m->Bn && (PetscAbsScalar(m->Bn - (pow(2.0*eta0, -m->n)*pow(e0, 1 - m->n)*pow(scal->stress_si, m->n)*scal->time_si)) < PetscAbsScalar(1e-10 * m->Bn))))) // on restart: full set, compare in non-dimensional units
 	{
@@ -635,9 +643,9 @@ PetscErrorCode DBMatReadPhase(DBMat *dbm, FB *fb, PetscBool PrintOutput)
 	m->Kb = Kb;
 
 	// check that at least one essential deformation mechanism is specified
-	if(!m->Bd && !m->Bn && !m->G && !m->Bdc && !m->eta_fk)
+	if(!m->Ad && !m->Bd && !m->An && !m->Bn && !m->G && !m->Bdc && !m->eta_fk)
 	{
-		SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_USER, "At least one of the parameter (set) Bd (eta), Bn (eta0, e0), Bdc, G, eta_fk must be specified for phase %lld", (LLD)ID);
+		SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_USER, "At least one of the parameter (set) Ad (eta), Bd (eta), An (eta0, e0), Bn (eta0, e0), Bdc, G, eta_fk must be specified for phase %lld", (LLD)ID);
 	}
 
 	// PRINT (optional)
@@ -753,10 +761,12 @@ PetscErrorCode DBMatReadPhase(DBMat *dbm, FB *fb, PetscBool PrintOutput)
 	m->rho_melt /= scal->density;
 
 	// diffusion creep
+	m->Ad     *= scal->viscosity;
 	m->Bd     *= scal->viscosity;
 	m->Vd     *= scal->stress_si;
 
 	// dislocation creep (power-law)
+	m->An     *= pow(scal->stress_si, m->n)*scal->time_si;
 	m->Bn     *= pow(scal->stress_si, m->n)*scal->time_si;
 	m->Vn     *= scal->stress_si;
 

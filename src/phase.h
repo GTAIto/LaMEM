@@ -155,10 +155,13 @@ public:
 	PetscScalar  Kp;                // pressure dependence parameter              [ ]
 	PetscScalar  G;                 // shear modulus                              [Pa]
 	// diffusion creep parameters
+	PetscScalar  Ad;                // bare diffusion creep prefactor (H&K 2003)  [1/Pa/s / (H/10^6 Si)^rd / μm^(-pd)]
 	PetscScalar  Bd;                // pre-exponential constant                   [1/Pa/s]
 	PetscScalar  Ed;                // activation energy                          [J/mol]
 	PetscScalar  Vd;                // activation volume                          [m^3/mol]
+	PetscScalar  d_mm;              // grain size                                 [mm]
 	// dislocation creep parameters
+	PetscScalar  An;                // bare dislocation creep prefactor (H&K 2003)[1/Pa^n/s / (H/10^6 Si)^rn]
 	PetscScalar  Bn;                // pre-exponential constant                   [1/Pa^n/s]
 	PetscScalar  n;                 // power law exponent                         [ ]
 	PetscScalar  En;                // activation energy                          [J/mol]
@@ -211,7 +214,11 @@ public:
 	PetscScalar  mfc;               // melt fraction viscosity correction
 	PetscScalar  rho_melt;          // rho melt
 	PetscScalar  M_cpx;    			// modal cpx fraction for Katz [wt frac, 0-1]
-	PetscScalar  X_water;  			// bulk water content for Katz  [wt frac, 0-1]
+	PetscScalar  C_0;  			// bulk water content for Katz  [wt frac, 0-1]
+	PetscScalar  phi_crit;   // critical volume porosity for melt extraction   [ ]
+	PetscScalar  rd;         // water exponent, diffusion creep [ ]
+	PetscScalar  rn;         // water exponent, dislocation creep [ ]
+	PetscScalar  pd;         // grain size exponent, diffusion creep [ ]
 	PetscInt     Phase_Diagram_melt;// flag that allows only to consider the melt quantity from a phase diagram
 };
 
