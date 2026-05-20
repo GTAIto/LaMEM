@@ -214,11 +214,14 @@ public:
 	PetscScalar  mfc;               // melt fraction viscosity correction
 	PetscScalar  rho_melt;          // rho melt
 	PetscScalar  M_cpx;    			// modal cpx fraction for Katz [wt frac, 0-1]
-	PetscScalar  C_0;  			// bulk water content for Katz  [wt frac, 0-1]
-	PetscScalar  phi_crit;   // critical volume porosity for melt extraction   [ ]
-	PetscScalar  rd;         // water exponent, diffusion creep [ ]
-	PetscScalar  rn;         // water exponent, dislocation creep [ ]
-	PetscScalar  pd;         // grain size exponent, diffusion creep [ ]
+	PetscScalar  C_0;  			    // bulk water content for Katz  [ppm by weight]
+	PetscScalar  phi_crit;          // critical volume porosity for melt extraction [ ]
+	PetscScalar  rd;                // water exponent, diffusion creep [ ]
+	PetscScalar  rn;                // water exponent, dislocation creep [ ]
+	PetscScalar  pd;                // grain size exponent, diffusion creep [ ]
+	PetscScalar  lambda;            // porosity melt-weakening coefficient [ ]
+	PetscScalar  beta_F;            // mantle depletion density coefficient [ ]
+	PetscScalar  eta_H2O;           // max water-induced viscosity contrast (e.g. 100 = 2 mag)
 	PetscInt     Phase_Diagram_melt;// flag that allows only to consider the melt quantity from a phase diagram
 };
 
@@ -277,7 +280,7 @@ PetscErrorCode DBMatCreate(DBMat *dbm, FB *fb, PetscBool PrintOutput);
 PetscErrorCode DBMatReadSoft(DBMat *dbm, FB *fb, PetscBool PrintOutput);
 
 // read single material phase
-PetscErrorCode DBMatReadPhase(DBMat *dbm, FB *fb, PetscBool PrintOutput);
+PetscErrorCode DBMatReadPhase(DBMat *dbm, FB *fb, PetscBool PrintOutput, PetscInt actKatzMelt);
 
 // print single material parameter
 void MatPrintScalParam(

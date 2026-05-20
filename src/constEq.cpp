@@ -177,6 +177,19 @@ PetscErrorCode setUpPhase(ConstEqCtx *ctx, PetscInt ID)
 		mfn = exp(mat->mfc*mf*mat->n);
 	}
 
+	// porosity melt weakening: exp(-λφ) term
+	if(mat->lambda > 0.0 && mat->phi_crit > 0.0 && mat->rho_melt > 0.0)
+	{
+		PetscScalar F_lam  = (ctx->svBulk) ? ctx->svBulk->Fn : 0.0;
+		// convert mass fraction → volume fraction
+		PetscScalar rho_l   = mat->rho_melt;
+		PetscScalar rho_s   = mat->rho;
+		PetscScalar phi_vol = F_lam * rho_s / (rho_l*(1.0 - F_lam) + F_lam*rho_s);
+		PetscScalar phi_lam = PetscMin(phi_vol, mat->phi_crit);
+		mfd *= exp(mat->lambda * phi_lam);
+		mfn *= exp(mat->lambda * phi_lam * mat->n);
+	}
+
 	// PRESSURE
 
 	// pore pressure
@@ -203,49 +216,68 @@ PetscErrorCode setUpPhase(ConstEqCtx *ctx, PetscInt ID)
 
 	// WATER-DEPENDENT RHEOLOGY: compute C_OH from Katz melt fraction
 	PetscScalar C_OH = 0.0;
-	PetscBool   wat_dep = (PetscBool)(ctrl->actWaterDep && mat->C_0 > 0.0 && mat->phi_crit > 0.0
-									&& (mat->rd > 0.0 || mat->rn > 0.0));
+	PetscScalar f_OH = 0.0;
+	PetscScalar f_OH_max = 0.0;
+	PetscBool wat_dep = (PetscBool)(mat->C_0 > 0.0 && (mat->Ad > 0.0 || mat->An > 0.0) && (mat->rd > 0.0 || mat->rn > 0.0));
 	if(wat_dep)
 	{
-		// Get D_water from Katz defaults (= 0.01)
-		meltPar_Katz mp_w;
-		setMeltParamsToDefault_Katz(&mp_w);
-		PetscScalar D = mp_w.D_water;
-
-		// Previous-timestep Katz melt fraction (cumulative depletion)
-		// svBulk is NULL at edge/face points — use F=0 (undepleted) in that case
-		PetscScalar F;
-		if(ctx->svBulk)
-		{
-			F = ctx->svBulk->Fn;
-		}
-		else
-		{
-			F = 0.0;
-		}
-
-		// Volume porosity φ → mass porosity Ø
-		// use rho_melt (rho_l) and rho (rho_s) specified in the input file
-		PetscScalar rho_l = mat->rho_melt;
-		PetscScalar rho_s = mat->rho;
-		PetscScalar phi_m = rho_l * mat->phi_crit
-						/ (rho_l * mat->phi_crit + rho_s*(1.0 - mat->phi_crit));
-
-		// C_s [wt frac]
 		PetscScalar Cs;
-		if(F <= phi_m)
+		if(!ctrl->actKatzMelt)
 		{
-			Cs = D * mat->C_0 / (D + F*(1.0 - D));              // batch melting
+			// No melt model: F = 0, all water retained in solid
+			Cs = mat->C_0;
 		}
 		else
 		{
-			PetscScalar ep = (1.0 - phi_m) * (1.0 - D) / ((1.0 - phi_m)*D + phi_m);
-			Cs = D * mat->C_0 / (phi_m + (1.0 - phi_m)*D)
-			* pow(1.0 - (F - phi_m), ep);                    // dynamic melting
+			// Get D_water from Katz defaults (= 0.01)
+			meltPar_Katz mp_w;
+			setMeltParamsToDefault_Katz(&mp_w);
+			PetscScalar D = mp_w.D_water;
+
+			// Previous-timestep Katz melt fraction (cumulative depletion)
+			// svBulk is NULL at edge/face points — use F=0 (undepleted) in that case
+			PetscScalar F;
+			if(ctx->svBulk)
+			{
+				F = PetscMax(ctx->svBulk->Fn, 0.0);
+			}
+			else
+			{
+				F = 0.0;
+			}
+
+			// Volume porosity φ → mass porosity Ø
+			// use rho_melt (rho_l) and rho (rho_s) specified in the input file
+			PetscScalar rho_l = mat->rho_melt;
+			PetscScalar rho_s = mat->rho;
+			PetscScalar phi_m = rho_l * mat->phi_crit
+							/ (rho_l * mat->phi_crit + rho_s*(1.0 - mat->phi_crit));
+
+			// C_s [ppm]
+			if(F <= phi_m)   // batch melting
+			{
+				Cs = D * mat->C_0 / (D + F*(1.0 - D));
+			}
+			else             // dynamic melting
+			{
+				PetscScalar ep = (1.0 - phi_m) * (1.0 - D) / ((1.0 - phi_m)*D + phi_m);
+				Cs = D * mat->C_0 / (phi_m + (1.0 - phi_m)*D) * pow(1.0 - (F - phi_m), ep);
+			}
 		}
 
-		// convert Cs (fraction) to ppm to C_OH [H/10^6 Si]
-		C_OH = (Cs * 1.0e6) / 0.0617;
+		// Cs [ppm wt] → C_OH [H/10^6 Si]
+		C_OH = Cs / 0.0617;
+
+		// H&K 2003 eq.6: C_OH = A_H2O × exp[-(E_H2O + PV_H2O)/RT] × f_H2O
+		// Constants: A_H2O=26 H/10^6Si/MPa, E_H2O=40000 J/mol, V_H2O=10e-6 m^3/mol
+		const PetscScalar A_H2O = 26.0;      // H/10^6 Si / MPa
+		const PetscScalar E_H2O = 40000.0;   // J/mol  — same units as mat->Ed
+		const PetscScalar V_H2O = 10.0e-6;   // m^3/mol — same units as mat->Vd
+		PetscScalar Q_H2O = (E_H2O + (p_visc * V_H2O)) / RT;  // same form as Q
+		f_OH = (C_OH / A_H2O) * exp(Q_H2O);   // fugacity in MPa
+		
+		PetscScalar C_OH_max = mat->C_0 / 0.0617;
+		f_OH_max = (C_OH_max / A_H2O) * exp(Q_H2O);
 	}
 
 	// LINEAR DIFFUSION CREEP (NEWTONIAN)
@@ -258,7 +290,15 @@ PetscErrorCode setUpPhase(ConstEqCtx *ctx, PetscInt ID)
 	{
 		Q          = (mat->Ed + p_visc*mat->Vd)/RT;
 		PetscScalar d_um = mat->d_mm * 1000.0;   // mm → μm (H&K 2003)
-		PetscScalar Ad_eff = mat->Ad * pow(C_OH, mat->rd) * pow(d_um, -mat->pd);
+		PetscScalar water_d;
+		if(mat->eta_H2O > 1.0 && f_OH_max > 0.0)
+		{
+			const PetscScalar p_sm   = 4.0;
+			PetscScalar f_OH_min_d   = f_OH_max / pow(pow(mat->eta_H2O, p_sm/mat->rd) - 1.0, 1.0/p_sm);
+			water_d = pow(pow(f_OH, p_sm) + pow(f_OH_min_d, p_sm), mat->rd/p_sm);
+		}
+		else { water_d = pow(f_OH, mat->rd); }
+		PetscScalar Ad_eff = mat->Ad * water_d * pow(d_um, -mat->pd);
 		ctx->A_dif = Ad_eff * exp(-Q) * mfd;
 	}
 
@@ -286,7 +326,15 @@ PetscErrorCode setUpPhase(ConstEqCtx *ctx, PetscInt ID)
 	{
 		Q          = (mat->En + p_visc*mat->Vn)/RT;
 		ctx->N_dis = mat->n;
-		PetscScalar An_eff = mat->An * pow(C_OH, mat->rn);
+		PetscScalar water_n;
+		if(mat->eta_H2O > 1.0 && f_OH_max > 0.0)
+		{
+			const PetscScalar p_sm   = 4.0;
+			PetscScalar f_OH_min_n   = f_OH_max / pow(pow(mat->eta_H2O, p_sm/mat->rn) - 1.0, 1.0/p_sm);
+			water_n = pow(pow(f_OH, p_sm) + pow(f_OH_min_n, p_sm), mat->rn/p_sm);
+		}
+		else { water_n = pow(f_OH, mat->rn); }
+		PetscScalar An_eff = mat->An * water_n;
 		ctx->A_dis =  An_eff * exp(-Q) * mfn;
 	}
 
@@ -764,12 +812,12 @@ PetscErrorCode volConstEq(ConstEqCtx *ctx)
 				
 				if(P_GPa < 0.0) P_GPa = 0.0;
 				
-				F_katz = MPgetFconsH(P_GPa, T_C, mat->C_0, mat->M_cpx, svBulk->Fn, &mp);
+				PetscScalar C_0_wt = mat->C_0 / 1e6;   // ppm → wt fraction
+				F_katz = MPgetFconsH(P_GPa, T_C, C_0_wt, mat->M_cpx, svBulk->Fn, &mp);
 				if(F_katz < 0.0) F_katz = 0.0;
 				if(F_katz > 1.0) F_katz = 1.0;
 				dF = PetscMax(F_katz - svBulk->Fn, 0.0); // F is the extented depletion, we don't allow freezing
 				svBulk->mf = svBulk->Fn + (phRat[i]*dF);
-				
 			}
 
 			// initialize
@@ -836,6 +884,27 @@ PetscErrorCode volConstEq(ConstEqCtx *ctx)
 				rho = mat->rho*cf_comp*cf_therm;
 			}
 
+			// mantle depletion density correction: Δρ = -ρ₀·β·F
+			if(mat->beta_F > 0.0)
+			{
+				rho -= mat->rho * mat->beta_F * F_katz;
+			}
+
+			// melt retention density correction: Δρ = -(ρ₀-ρl)·φ
+			if(mat->rho_melt > 0.0 && mat->phi_crit > 0.0)
+			{
+				// convert F_katz (mass) → volume fraction
+				PetscScalar rho_l   = mat->rho_melt;
+				PetscScalar rho_s   = mat->rho;
+				PetscScalar phi_vol = F_katz * rho_s / (rho_l*(1.0 - F_katz) + F_katz*rho_s);
+
+				// compare in volume space with phi_crit (volume)
+				PetscScalar phi_ret = PetscMin(phi_vol, mat->phi_crit);
+
+				// Δρ = -(ρ_s - ρ_l) × φ_vol
+				rho -= (rho_s - rho_l) * phi_ret;
+			}
+
 			// update density, thermal expansion & inverse bulk elastic parameter
 			svBulk->rho   += phRat[i]*rho;
 			svBulk->alpha += phRat[i]*mat->alpha;
@@ -843,6 +912,9 @@ PetscErrorCode volConstEq(ConstEqCtx *ctx)
 	}
 
 	if(Kavg) svBulk->IKdt = 1.0/Kavg/dt;
+
+	if(ctx->ctrl->actKatzMelt && svBulk->mf < svBulk->Fn)
+		svBulk->mf = svBulk->Fn;
 
 	// Compute rate of melting
 	if (ctx->ctrl->actKatzMelt) {

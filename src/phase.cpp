@@ -27,6 +27,9 @@ PetscErrorCode DBMatCreate(DBMat *dbm, FB *fb, PetscBool PrintOutput)
 	PetscErrorCode ierr;
 	PetscFunctionBeginUser;
 
+	PetscInt actKatzMelt = 0;
+	ierr = getIntParam(fb, _OPTIONAL_, "act_katz_melt", &actKatzMelt, 1, 1); CHKERRQ(ierr);
+
 	//===============
 	// SOFTENING LAWS
 	//===============
@@ -99,7 +102,7 @@ PetscErrorCode DBMatCreate(DBMat *dbm, FB *fb, PetscBool PrintOutput)
 	// read each individual phase
 	for(jj = 0; jj < fb->nblocks; jj++)
 	{
-		ierr = DBMatReadPhase(dbm, fb, PrintOutput); CHKERRQ(ierr);
+		ierr = DBMatReadPhase(dbm, fb, PrintOutput, actKatzMelt); CHKERRQ(ierr);
 
 		fb->blockID++;
 
@@ -246,7 +249,7 @@ PetscErrorCode DBMatReadSoft(DBMat *dbm, FB *fb, PetscBool PrintOutput)
 }
 //---------------------------------------------------------------------------
 
-PetscErrorCode DBMatReadPhase(DBMat *dbm, FB *fb, PetscBool PrintOutput)
+PetscErrorCode DBMatReadPhase(DBMat *dbm, FB *fb, PetscBool PrintOutput, PetscInt actKatzMelt)
 {
 	// read material properties from file with error checking
 	Scaling    *scal;
@@ -459,14 +462,17 @@ PetscErrorCode DBMatReadPhase(DBMat *dbm, FB *fb, PetscBool PrintOutput)
 	//=================================================================================
 	// melt fraction viscosity parametrization
 	//=================================================================================
-	ierr = getScalarParam(fb, _OPTIONAL_, "mfc",      &m->mfc,   1, 1.0);  CHKERRQ(ierr);
-	ierr = getScalarParam(fb, _OPTIONAL_, "rho_melt", &m->rho_melt,1, 1.0);  CHKERRQ(ierr);
-	ierr = getScalarParam(fb, _OPTIONAL_, "M_cpx",    &m->M_cpx,   1, 1.0); CHKERRQ(ierr);
-	ierr = getScalarParam(fb, _OPTIONAL_, "C_0",      &m->C_0, 1, 1.0); CHKERRQ(ierr);
+	ierr = getScalarParam(fb, _OPTIONAL_, "mfc",      &m->mfc,      1, 1.0); CHKERRQ(ierr);
+	ierr = getScalarParam(fb, _OPTIONAL_, "rho_melt", &m->rho_melt, 1, 1.0); CHKERRQ(ierr);
+	ierr = getScalarParam(fb, _OPTIONAL_, "M_cpx",    &m->M_cpx,    1, 1.0); CHKERRQ(ierr);
+	ierr = getScalarParam(fb, _OPTIONAL_, "C_0",      &m->C_0,      1, 1.0); CHKERRQ(ierr);
 	ierr = getScalarParam(fb, _OPTIONAL_, "phi_crit", &m->phi_crit, 1, 1.0); CHKERRQ(ierr);
 	ierr = getScalarParam(fb, _OPTIONAL_, "rd",       &m->rd,       1, 1.0); CHKERRQ(ierr);
 	ierr = getScalarParam(fb, _OPTIONAL_, "rn",       &m->rn,       1, 1.0); CHKERRQ(ierr);
 	ierr = getScalarParam(fb, _OPTIONAL_, "pd",       &m->pd,       1, 1.0); CHKERRQ(ierr);
+	ierr = getScalarParam(fb, _OPTIONAL_, "lambda",   &m->lambda,   1, 1.0); CHKERRQ(ierr);
+	ierr = getScalarParam(fb, _OPTIONAL_, "beta_F",   &m->beta_F,   1, 1.0); CHKERRQ(ierr);
+	ierr = getScalarParam(fb, _OPTIONAL_, "eta_H2O",  &m->eta_H2O,  1, 1.0); CHKERRQ(ierr);
 
 	if (PrintOutput)
 	{	
@@ -646,6 +652,57 @@ PetscErrorCode DBMatReadPhase(DBMat *dbm, FB *fb, PetscBool PrintOutput)
 	if(!m->Ad && !m->Bd && !m->An && !m->Bn && !m->G && !m->Bdc && !m->eta_fk)
 	{
 		SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_USER, "At least one of the parameter (set) Ad (eta), Bd (eta), An (eta0, e0), Bn (eta0, e0), Bdc, G, eta_fk must be specified for phase %lld", (LLD)ID);
+	}
+
+	if(actKatzMelt)
+	{
+		if((m->M_cpx > 0.0) != (m->C_0 > 0.0))
+			SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_USER, "act_katz_melt: M_cpx and C_0 must both be specified for phase %lld", (LLD)ID);
+	}
+
+	if(m->Ad > 0.0 || m->An > 0.0)
+	{
+		// phi_crit and rho_melt only needed when Katz melting is on
+		if(actKatzMelt && (!m->phi_crit || !m->rho_melt))
+			SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_USER,
+				"Ad/An with act_katz_melt requires phi_crit and rho_melt for phase %lld", (LLD)ID);
+	}
+
+	// Ad defined → must have rd, pd, d_mm; must not have Bd
+	if(m->Ad > 0.0)
+	{
+		if(!m->rd || !m->pd || !m->d_mm)
+			SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_USER,
+				"Ad requires rd, pd, d_mm for phase %lld", (LLD)ID);
+		if(m->Bd)
+			SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_USER,
+				"Do not specify Bd together with Ad for phase %lld", (LLD)ID);
+	}
+
+	// An defined → must have rn; must not have Bn
+	if(m->An > 0.0)
+	{
+		if(!m->rn)
+			SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_USER,
+				"An requires rn for phase %lld", (LLD)ID);
+		if(m->Bn)
+			SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_USER,
+				"Do not specify Bn together with An for phase %lld", (LLD)ID);
+	}
+
+	if((m->Ad > 0.0 || m->An > 0.0) && m->eta_H2O <= 1.0 && actKatzMelt)
+	{
+		PetscPrintf(PETSC_COMM_WORLD,
+			"WARNING: phase %lld uses water-dependent rheology (Ad/An) but eta_H2O is not set.\n"
+			"         Viscosity may become very large upon dehydration. Consider setting eta_H2O\n"
+			"         (e.g., eta_H2O = 100 for 2 orders of magnitude maximum contrast).\n",
+			(LLD)ID);
+	}
+
+	if(m->Bd > 0.0 || m->Bn > 0.0)
+	{
+		if(m->rd || m->rn || m->pd || m->d_mm )
+			SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_USER, "Phase with Bd/Bn must not specify rd, rn, pd, d_mm for phase %lld", (LLD)ID);
 	}
 
 	// PRINT (optional)
