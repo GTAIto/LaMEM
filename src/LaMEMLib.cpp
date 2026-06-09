@@ -680,6 +680,9 @@ PetscErrorCode LaMEMLibSolve(LaMEMLib *lm, void *param, PetscLogStage stages[4])
 		// view nonlinear residual
 		ierr = JacResViewRes(&lm->jr); CHKERRQ(ierr);
 
+		// Recompute melt fraction from converged T_{n+1} for correct marker advection
+		ierr = JacResUpdateKatzMeltFraction(&lm->jr); CHKERRQ(ierr);
+
 		// Compute adjoint gradients every TS
 		if (param)
 		{

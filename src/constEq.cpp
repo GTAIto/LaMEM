@@ -808,7 +808,8 @@ PetscErrorCode volConstEq(ConstEqCtx *ctx)
 				// Use lithostatic pressure, convert to GPa for Katz
 				P_GPa = ctx->p_lith * ctx->scal->stress_si / 1.0e9;
 				// Convert temperature to Celsius for Katz
-				T_C   = T * ctx->scal->temperature - ctx->scal->Tshift;
+				PetscScalar T_katz = (svBulk != NULL) ? svBulk->Tn : T;
+				T_C   = T_katz * ctx->scal->temperature - ctx->scal->Tshift;
 				
 				if(P_GPa < 0.0) P_GPa = 0.0;
 				

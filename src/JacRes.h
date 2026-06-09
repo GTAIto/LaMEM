@@ -381,6 +381,8 @@ PetscErrorCode JacResGetTempRes(JacRes *jr, PetscScalar dt);
 // assemble temperature preconditioner matrix
 PetscErrorCode JacResGetTempMat(JacRes *jr, PetscScalar dt);
 
+PetscErrorCode JacResUpdateKatzMeltFraction(JacRes *jr);
+
 //---------------------------------------------------------------------------
 //......................   INTEGRATION FUNCTIONS   ..........................
 //---------------------------------------------------------------------------

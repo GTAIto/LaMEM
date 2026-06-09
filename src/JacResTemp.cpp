@@ -20,6 +20,7 @@
 #include "matrix.h"
 #include "surf.h"
 #include "dike.h"
+#include "meltParam.h"
 
 //---------------------------------------------------------------------------
 
@@ -703,6 +704,12 @@ PetscErrorCode JacResGetTempMat(JacRes *jr, PetscScalar dt)
 		+       (bkx/bdx + fkx/fdx)/dx
 		+       (bky/bdy + fky/fdy)/dy
 		+       (bkz/bdz + fkz/fdz)/dz;
+		// Make matrix consistent with latent heat term in residual (d(Hl)/dT = rho*DS*dFdt)
+		if(jr->ctrl.actKatzMelt && svBulk->dFdt > 0.0)
+		{
+			PetscScalar DS_nd = 300.0 / jr->scal->cpecific_heat;
+			v[6] += svBulk->rho * DS_nd * svBulk->dFdt;
+		}
 
 		// set matrix coefficients
 		PetscCall(MatSetValuesStencil(jr->Att, 1, row, 7, col, v, ADD_VALUES));
@@ -718,6 +725,76 @@ PetscErrorCode JacResGetTempMat(JacRes *jr, PetscScalar dt)
 
 	// assemble temperature matrix
 	PetscCall(MatAIJAssemble(jr->Att, num, list, 1.0));
+
+	PetscFunctionReturn(0);
+}
+
+//---------------------------------------------------------------------------
+PetscErrorCode JacResUpdateKatzMeltFraction(JacRes *jr)
+{
+	// Recompute melt fraction from the converged temperature T_{n+1}.
+	// Called once after SNESSolve so that svBulk->mf = F_katz(T_{n+1}),
+	// giving the correct dF for marker advection and correct Fn next timestep.
+
+	FDSTAG       *fs;
+	SolVarCell   *svCell;
+	SolVarBulk   *svBulk;
+	Material_t   *mat, *phases;
+	meltPar_Katz  mp;
+	PetscScalar  ***lT, ***lp_lith;
+	PetscScalar   Tc, P_GPa, T_C, C_0_wt, F_katz, dF, dt;
+	PetscInt      i, j, k, nx, ny, nz, sx, sy, sz, iter, ph, numPhases;
+
+	PetscErrorCode ierr;
+	PetscFunctionBeginUser;
+
+	if(!jr->ctrl.actKatzMelt) PetscFunctionReturn(0);
+
+	fs        = jr->fs;
+	phases    = jr->dbm->phases;
+	numPhases = jr->dbm->numPhases;
+	dt        = jr->ts->dt;
+
+	setMeltParamsToDefault_Katz(&mp);
+
+	ierr = DMDAVecGetArray(fs->DA_CEN, jr->lT,      &lT);      CHKERRQ(ierr);
+	ierr = DMDAVecGetArray(fs->DA_CEN, jr->lp_lith, &lp_lith); CHKERRQ(ierr);
+	ierr = DMDAGetCorners (fs->DA_CEN, &sx, &sy, &sz, &nx, &ny, &nz); CHKERRQ(ierr);
+
+	iter = 0;
+	START_STD_LOOP
+	{
+		svCell = &jr->svCell[iter++];
+		svBulk = &svCell->svBulk;
+
+		Tc    = lT[k][j][i];
+		P_GPa = lp_lith[k][j][i] * jr->scal->stress_si / 1.0e9;
+		if(P_GPa < 0.0) P_GPa = 0.0;
+
+		for(ph = 0; ph < numPhases; ph++)
+		{
+			if(!svCell->phRat[ph]) continue;
+			mat = &phases[ph];
+			if(mat->M_cpx <= 0.0) continue;
+
+			T_C    = Tc * jr->scal->temperature - jr->scal->Tshift;
+			C_0_wt = mat->C_0 / 1.0e6;
+
+			F_katz = MPgetFconsH(P_GPa, T_C, C_0_wt, mat->M_cpx, svBulk->Fn, &mp);
+			if(F_katz < 0.0) F_katz = 0.0;
+			if(F_katz > 1.0) F_katz = 1.0;
+			dF = PetscMax(F_katz - svBulk->Fn, 0.0);
+			svBulk->mf = svBulk->Fn + svCell->phRat[ph] * dF;
+		}
+
+		if(svBulk->mf < svBulk->Fn) svBulk->mf = svBulk->Fn;
+
+		svBulk->dFdt = (dt > 0.0) ? (svBulk->mf - svBulk->Fn) / dt : 0.0;
+	}
+	END_STD_LOOP
+
+	ierr = DMDAVecRestoreArray(fs->DA_CEN, jr->lT,      &lT);      CHKERRQ(ierr);
+	ierr = DMDAVecRestoreArray(fs->DA_CEN, jr->lp_lith, &lp_lith); CHKERRQ(ierr);
 
 	PetscFunctionReturn(0);
 }
