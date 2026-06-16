@@ -1,4 +1,5 @@
-# LaMEM
+<img src="./doc/src/assets/img/logo_LaMEM_c.png" width="200">
+
 [![Build Status](https://github.com/UniMainzGeo/LaMEM/workflows/CI/badge.svg)](https://github.com/UniMainzGeo/LaMEM/actions)
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://unimainzgeo.github.io/LaMEM/dev)
 [![DOI](https://zenodo.org/badge/641438500.svg)](https://zenodo.org/doi/10.5281/zenodo.10211634)
@@ -15,7 +16,7 @@ quasi-Newton solvers (provided through the PETSc interface).
 
 LaMEM has been tested on a variety of machines ranging from laptops to a massively parallel cluster with 458'752 cores.
 
- ![Getting Started](./docs/src/assets/img/LaMEM_overview.png)
+ ![Getting Started](./doc/src/assets/img/LaMEM_overview.png)
 
 ## Getting started
 
