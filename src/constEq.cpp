@@ -216,8 +216,9 @@ PetscErrorCode setUpPhase(ConstEqCtx *ctx, PetscInt ID)
 
 	// WATER-DEPENDENT RHEOLOGY: compute C_OH from Katz melt fraction
 	PetscScalar C_OH = 0.0;
-	PetscScalar f_OH = 0.0;
-	PetscScalar f_OH_max = 0.0;
+	PetscScalar C_OH_max = 0.0;
+	//PetscScalar f_OH = 0.0;
+	//PetscScalar f_OH_max = 0.0;
 	PetscBool wat_dep = (PetscBool)(mat->C_0 > 0.0 && (mat->Ad > 0.0 || mat->An > 0.0) && (mat->rd > 0.0 || mat->rn > 0.0));
 	if(wat_dep)
 	{
@@ -270,14 +271,14 @@ PetscErrorCode setUpPhase(ConstEqCtx *ctx, PetscInt ID)
 
 		// H&K 2003 eq.6: C_OH = A_H2O × exp[-(E_H2O + PV_H2O)/RT] × f_H2O
 		// Constants: A_H2O=26 H/10^6Si/MPa, E_H2O=40000 J/mol, V_H2O=10e-6 m^3/mol
-		const PetscScalar A_H2O = 26.0;      // H/10^6 Si / MPa
-		const PetscScalar E_H2O = 40000.0;   // J/mol  — same units as mat->Ed
-		const PetscScalar V_H2O = 10.0e-6;   // m^3/mol — same units as mat->Vd
-		PetscScalar Q_H2O = (E_H2O + (p_visc * V_H2O)) / RT;  // same form as Q
-		f_OH = (C_OH / A_H2O) * exp(Q_H2O);   // fugacity in MPa
+		//const PetscScalar A_H2O = 26.0;      // H/10^6 Si / MPa
+		//const PetscScalar E_H2O = 40000.0;   // J/mol  — same units as mat->Ed
+		//const PetscScalar V_H2O = 10.0e-6;   // m^3/mol — same units as mat->Vd
+		//PetscScalar Q_H2O = (E_H2O + (p_visc * V_H2O)) / RT;  // same form as Q
+		//f_OH = (C_OH / A_H2O) * exp(Q_H2O);   // fugacity in MPa
 		
-		PetscScalar C_OH_max = mat->C_0 / 0.0617;
-		f_OH_max = (C_OH_max / A_H2O) * exp(Q_H2O);
+		C_OH_max = mat->C_0 / 0.0617;
+		//f_OH_max = (C_OH_max / A_H2O) * exp(Q_H2O);
 	}
 
 	// LINEAR DIFFUSION CREEP (NEWTONIAN)
@@ -291,13 +292,17 @@ PetscErrorCode setUpPhase(ConstEqCtx *ctx, PetscInt ID)
 		Q          = (mat->Ed + p_visc*mat->Vd)/RT;
 		PetscScalar d_um = mat->d_mm * 1000.0;   // mm → μm (H&K 2003)
 		PetscScalar water_d;
-		if(mat->eta_H2O > 1.0 && f_OH_max > 0.0)
+		//if(mat->eta_H2O > 1.0 && f_OH_max > 0.0)
+		if(mat->eta_H2O > 1.0 && C_OH_max > 0.0)
 		{
 			const PetscScalar p_sm   = 4.0;
-			PetscScalar f_OH_min_d   = f_OH_max / pow(pow(mat->eta_H2O, p_sm/mat->rd) - 1.0, 1.0/p_sm);
-			water_d = pow(pow(f_OH, p_sm) + pow(f_OH_min_d, p_sm), mat->rd/p_sm);
+			//PetscScalar f_OH_min_d   = f_OH_max / pow(pow(mat->eta_H2O, p_sm/mat->rd) - 1.0, 1.0/p_sm);
+			//water_d = pow(pow(f_OH, p_sm) + pow(f_OH_min_d, p_sm), mat->rd/p_sm);
+			PetscScalar C_OH_min_d   = C_OH_max / pow(pow(mat->eta_H2O, p_sm/mat->rd) - 1.0, 1.0/p_sm);
+			water_d = pow(pow(C_OH, p_sm) + pow(C_OH_min_d, p_sm), mat->rd/p_sm);
 		}
-		else { water_d = pow(f_OH, mat->rd); }
+		//else { water_d = pow(f_OH, mat->rd); 
+		else { water_d = pow(C_OH, mat->rd);}
 		PetscScalar Ad_eff = mat->Ad * water_d * pow(d_um, -mat->pd);
 		ctx->A_dif = Ad_eff * exp(-Q) * mfd;
 	}
@@ -327,13 +332,17 @@ PetscErrorCode setUpPhase(ConstEqCtx *ctx, PetscInt ID)
 		Q          = (mat->En + p_visc*mat->Vn)/RT;
 		ctx->N_dis = mat->n;
 		PetscScalar water_n;
-		if(mat->eta_H2O > 1.0 && f_OH_max > 0.0)
+		//if(mat->eta_H2O > 1.0 && f_OH_max > 0.0)
+		if(mat->eta_H2O > 1.0 && C_OH_max > 0.0)
 		{
 			const PetscScalar p_sm   = 4.0;
-			PetscScalar f_OH_min_n   = f_OH_max / pow(pow(mat->eta_H2O, p_sm/mat->rn) - 1.0, 1.0/p_sm);
-			water_n = pow(pow(f_OH, p_sm) + pow(f_OH_min_n, p_sm), mat->rn/p_sm);
+			//PetscScalar f_OH_min_n   = f_OH_max / pow(pow(mat->eta_H2O, p_sm/mat->rn) - 1.0, 1.0/p_sm);
+			//water_n = pow(pow(f_OH, p_sm) + pow(f_OH_min_n, p_sm), mat->rn/p_sm);
+			PetscScalar C_OH_min_n   = C_OH_max / pow(pow(mat->eta_H2O, p_sm/mat->rn) - 1.0, 1.0/p_sm);
+			water_n = pow(pow(C_OH, p_sm) + pow(C_OH_min_n, p_sm), mat->rn/p_sm);
 		}
-		else { water_n = pow(f_OH, mat->rn); }
+		//else { water_n = pow(f_OH, mat->rn); }
+		else { water_n = pow(C_OH, mat->rn); }
 		PetscScalar An_eff = mat->An * water_n;
 		ctx->A_dis =  An_eff * exp(-Q) * mfn;
 	}

@@ -675,8 +675,10 @@ PetscErrorCode DBMatReadPhase(DBMat *dbm, FB *fb, PetscBool PrintOutput, PetscIn
 			SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_USER,
 				"Ad requires rd, pd, d_mm for phase %lld", (LLD)ID);
 		if(m->Bd)
-			SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_USER,
-				"Do not specify Bd together with Ad for phase %lld", (LLD)ID);
+		{
+			PetscPrintf(PETSC_COMM_WORLD, "Phase %lld: Ad specified together with Bd; Ad takes precedence, Bd will be ignored.\n", (LLD)ID);
+			m->Bd = 0.0;
+		}
 	}
 
 	// An defined → must have rn; must not have Bn
@@ -686,8 +688,10 @@ PetscErrorCode DBMatReadPhase(DBMat *dbm, FB *fb, PetscBool PrintOutput, PetscIn
 			SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_USER,
 				"An requires rn for phase %lld", (LLD)ID);
 		if(m->Bn)
-			SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_USER,
-				"Do not specify Bn together with An for phase %lld", (LLD)ID);
+		{
+			PetscPrintf(PETSC_COMM_WORLD, "Phase %lld: An specified together with Bn; An takes precedence, Bn will be ignored.\n", (LLD)ID);
+			m->Bn = 0.0;
+		}
 	}
 
 	if((m->Ad > 0.0 || m->An > 0.0) && m->eta_H2O <= 1.0 && actKatzMelt)

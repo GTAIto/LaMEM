@@ -704,6 +704,12 @@ PetscErrorCode JacResGetTempMat(JacRes *jr, PetscScalar dt)
 		+       (bky/bdy + fky/fdy)/dy
 		+       (bkz/bdz + fkz/fdz)/dz;
 
+		if(jr->ctrl.actKatzMelt && svBulk->dFdt > 0.0)
+		{
+			PetscScalar DS_nd = 300.0 / jr->scal->cpecific_heat;
+			v[6] += svBulk->rho * DS_nd * svBulk->dFdt;
+		}
+
 		// set matrix coefficients
 		PetscCall(MatSetValuesStencil(jr->Att, 1, row, 7, col, v, ADD_VALUES));
 
